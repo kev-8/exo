@@ -13,21 +13,18 @@ ROOT_DIR = Path(__file__).parent
 DATA_DIR = ROOT_DIR / "data"
 FEATURES_DIR = DATA_DIR / "features"
 RISK_INDEX_DIR = DATA_DIR / "risk_index"
-SECRETS_DIR = ROOT_DIR / "secrets"
 
 # ---------------------------------------------------------------------------
 # API credentials
 # ---------------------------------------------------------------------------
 
 KALSHI_API_KEY_ID: str = os.getenv("KALSHI_API_KEY_ID", "")
-KALSHI_PRIVATE_KEY_PATH: str = os.getenv(
-    "KALSHI_PRIVATE_KEY_PATH", str(SECRETS_DIR / "kalshi_private_key.pem")
-)
+KALSHI_PRIVATE_KEY: str = os.getenv("KALSHI_PRIVATE_KEY", "")  # PEM content
 KALSHI_BASE_URL: str = os.getenv(
-    "KALSHI_BASE_URL", "https://trading-api.kalshi.com/trade-api/v2"
+    "KALSHI_BASE_URL", "https://api.elections.kalshi.com/trade-api/v2"
 )
 KALSHI_WS_URL: str = os.getenv(
-    "KALSHI_WS_URL", "wss://trading-api.kalshi.com/trade-api/ws/v2"
+    "KALSHI_WS_URL", "wss://api.elections.kalshi.com/trade-api/ws/v2"
 )
 
 FRED_API_KEY: str = os.getenv("FRED_API_KEY", "")
