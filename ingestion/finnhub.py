@@ -1,4 +1,4 @@
-"""Finnhub ingestor — news sentiment API, every 30 minutes."""
+"""Finnhub ingestor — news sentiment via FinBERT, every 30 minutes."""
 
 from __future__ import annotations
 
@@ -14,13 +14,41 @@ from exo.models import FeatureRecord, RawRecord
 logger = logging.getLogger(__name__)
 
 FINNHUB_BASE = "https://finnhub.io/api/v1"
-
-# Market news categories to track
 CATEGORIES = ["general", "forex", "crypto", "merger"]
+
+_pipeline = None
+
+
+def _get_pipeline():
+    """Lazy-load FinBERT pipeline (downloads model on first call)."""
+    global _pipeline
+    if _pipeline is None:
+        from transformers import pipeline
+        logger.info("Loading FinBERT sentiment model...")
+        _pipeline = pipeline(
+            "sentiment-analysis",
+            model="ProsusAI/finbert",
+            tokenizer="ProsusAI/finbert",
+            truncation=True,
+            max_length=512,
+        )
+        logger.info("FinBERT model loaded")
+    return _pipeline
+
+
+def _score_texts(texts: list[str]) -> float:
+    """Run FinBERT on a list of texts, return mean sentiment in [-1, 1]."""
+    if not texts:
+        return 0.0
+    pipe = _get_pipeline()
+    results = pipe(texts, batch_size=16)
+    label_map = {"positive": 1.0, "negative": -1.0, "neutral": 0.0}
+    scores = [label_map.get(r["label"].lower(), 0.0) * r["score"] for r in results]
+    return sum(scores) / len(scores)
 
 
 class FinnhubIngestor(BaseIngestor):
-    """Ingest Finnhub news sentiment signals."""
+    """Ingest Finnhub news and score sentiment locally with FinBERT."""
 
     source = "finnhub"
 
@@ -44,31 +72,29 @@ class FinnhubIngestor(BaseIngestor):
                     if not articles:
                         continue
 
-                    # Aggregate sentiment across articles
-                    sentiments: list[float] = []
-                    for art in articles[:20]:
-                        sentiment = art.get("sentiment")
-                        if sentiment is not None:
-                            try:
-                                sentiments.append(float(sentiment))
-                            except (ValueError, TypeError):
-                                pass
+                    texts = [
+                        f"{a.get('headline', '')} {a.get('summary', '')}".strip()
+                        for a in articles[:20]
+                        if a.get("headline") or a.get("summary")
+                    ]
 
-                    if sentiments:
-                        mean_sent = sum(sentiments) / len(sentiments)
-                        raws.append(
-                            RawRecord(
-                                source=self.source,
-                                entity=category,
-                                raw={
-                                    "category": category,
-                                    "mean_sentiment": mean_sent,
-                                    "n_articles": len(sentiments),
-                                    "headlines": [a.get("headline", "")[:100] for a in articles[:3]],
-                                },
-                                fetched_at=now,
-                            )
+                    if not texts:
+                        continue
+
+                    mean_sentiment = _score_texts(texts)
+                    raws.append(
+                        RawRecord(
+                            source=self.source,
+                            entity=category,
+                            raw={
+                                "category": category,
+                                "mean_sentiment": mean_sentiment,
+                                "n_articles": len(texts),
+                                "headlines": [a.get("headline", "")[:100] for a in articles[:3]],
+                            },
+                            fetched_at=now,
                         )
+                    )
                 except Exception as exc:
                     logger.warning("Finnhub fetch failed for %s: %s", category, exc)
 
@@ -77,7 +103,6 @@ class FinnhubIngestor(BaseIngestor):
     def normalise(self, raw: RawRecord) -> list[FeatureRecord]:
         now = raw.fetched_at
         sentiment = float(raw.raw.get("mean_sentiment", 0.0))
-        # Finnhub sentiment is typically in [-1, 1]
         normalised = max(-1.0, min(1.0, sentiment))
 
         return [

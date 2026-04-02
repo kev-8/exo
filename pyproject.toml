@@ -21,6 +21,8 @@ dependencies = [
     "redis>=5.0",
     "apscheduler>=3.10",
     "structlog>=24",
+    "transformers>=4.40",
+    "torch>=2.2",
 ]
 
 [project.optional-dependencies]

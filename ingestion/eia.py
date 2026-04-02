@@ -45,7 +45,7 @@ class EIAIngestor(BaseIngestor):
                         "api_key": config.EIA_API_KEY,
                         "frequency": "daily",
                         "data[0]": "value",
-                        "facets[series][]": "PET.RWTC.D",
+                        "facets[series][]": "RWTC",
                         "sort[0][column]": "period",
                         "sort[0][direction]": "desc",
                         "length": 1,
@@ -68,12 +68,12 @@ class EIAIngestor(BaseIngestor):
             # Natural gas Henry Hub
             try:
                 resp = await client.get(
-                    f"{EIA_BASE}/natural-gas/pri/sum/data/",
+                    f"{EIA_BASE}/natural-gas/pri/fut/data/",
                     params={
                         "api_key": config.EIA_API_KEY,
                         "frequency": "daily",
                         "data[0]": "value",
-                        "facets[series][]": "NG.RNGWHHD.D",
+                        "facets[series][]": "RNGWHHD",
                         "sort[0][column]": "period",
                         "sort[0][direction]": "desc",
                         "length": 1,
