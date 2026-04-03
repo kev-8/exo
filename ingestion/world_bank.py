@@ -21,6 +21,10 @@ INDICATORS: dict[str, tuple[str, int]] = {
     "GC.DOD.TOTL.GD.ZS": ("debt_to_gdp", 1),            # Debt % GDP
     "SL.UEM.TOTL.ZS": ("unemployment_rate", 1),          # Unemployment %
     "NY.GNS.ICTR.ZS": ("gross_savings", -1),             # Gross savings %
+    "PV.EST": ("political_stability", -1),               # WGI: Political Stability & Absence of Violence (-2.5 to 2.5)
+    "VA.EST": ("voice_accountability", -1),              # WGI: Voice & Accountability (-2.5 to 2.5)
+    "RL.EST": ("rule_of_law", -1),                       # WGI: Rule of Law (-2.5 to 2.5)
+    "CC.EST": ("control_of_corruption", -1),             # WGI: Control of Corruption (-2.5 to 2.5)
 }
 
 COUNTRIES = ["US", "RU", "CN", "UA", "IL", "IR", "IN", "PK"]
@@ -69,16 +73,26 @@ class WorldBankIngestor(BaseIngestor):
         now = raw.fetched_at
         records: list[FeatureRecord] = []
 
+        WGI_INDICATORS = {"PV.EST", "VA.EST", "RL.EST", "CC.EST"}
+
         for indicator_id, (signal_type, sign) in INDICATORS.items():
             val = raw.raw.get(indicator_id)
             if val is None:
                 continue
+
+            if indicator_id in WGI_INDICATORS:
+                # WGI scale: -2.5 (worst) to +2.5 (best) → normalise to [0, 1]
+                normalised = (float(val) + 2.5) / 5.0
+                store_val = normalised
+            else:
+                store_val = float(val)
+
             records.append(
                 FeatureRecord(
                     source=self.source,
                     entity=raw.entity,
                     signal_type=signal_type,
-                    value=float(val),
+                    value=store_val,
                     metadata={"indicator_id": indicator_id, "stress_sign": sign},
                     as_of_ts=now,
                 )

@@ -51,7 +51,6 @@ STALENESS_THRESHOLDS: dict[str, float] = {
     "finnhub": 30 * 60,         # 30 min
     "reddit": 60 * 60,          # 1 hour
     "google_trends": 2 * 3600,  # 2 hours
-    "fivethirtyeight": 6 * 3600,
     "fred": 12 * 3600,
     "world_bank": 24 * 3600,
     "eia": 24 * 3600,

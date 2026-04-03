@@ -15,7 +15,6 @@ from exo.event_bus import get_bus
 from exo.ingestion.acled import ACLEDIngestor
 from exo.ingestion.eia import EIAIngestor
 from exo.ingestion.finnhub import FinnhubIngestor
-from exo.ingestion.fivethirtyeight import FiveThirtyEightIngestor
 from exo.ingestion.fred import FREDIngestor
 from exo.ingestion.gdelt import GDELTIngestor
 from exo.ingestion.google_trends import GoogleTrendsIngestor
@@ -49,7 +48,6 @@ class ExoScheduler:
         self.kalshi = KalshiIngestor(**_kwargs)
         self.acled = ACLEDIngestor(**_kwargs)
         self.fred = FREDIngestor(**_kwargs)
-        self.fivethirtyeight = FiveThirtyEightIngestor(**_kwargs)
         self.google_trends = GoogleTrendsIngestor(**_kwargs)
         self.reddit = RedditIngestor(**_kwargs)
         self.world_bank = WorldBankIngestor(**_kwargs)
@@ -98,10 +96,6 @@ class ExoScheduler:
         # Google Trends — every 2 hours
         self._add_ingestor_job(self.google_trends, "google_trends_ingest",
                                trigger=IntervalTrigger(hours=2))
-
-        # FiveThirtyEight — every 6 hours
-        self._add_ingestor_job(self.fivethirtyeight, "fivethirtyeight_ingest",
-                               trigger=IntervalTrigger(hours=6))
 
         # FRED — every 12 hours
         self._add_ingestor_job(self.fred, "fred_ingest",
