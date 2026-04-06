@@ -6,7 +6,7 @@ A geopolitical risk intelligence platform that produces a real-time country-leve
 
 ## What it does
 
-exo ingests news events, conflict data, economic indicators, social sentiment, polling averages, and market data on a rolling schedule. It normalises all signals into a shared feature store, then computes a weighted composite risk score across five dimensions for each tracked country.
+exo ingests news events, conflict data, economic indicators, social sentiment, and market data on a rolling schedule. It normalises all signals into a shared feature store, then computes a weighted composite risk score across five dimensions for each tracked country.
 
 The risk index is updated every 6 hours and validated against established benchmarks (ICRG, V-Dem).
 
@@ -18,15 +18,13 @@ The risk index is updated every 6 hours and validated against established benchm
 |---|---|---|
 | GDELT | 15 min | News sentiment and event magnitude by country |
 | Kalshi | 15 min + WebSocket | Market prices and volume |
-| Finnhub | 30 min | Financial news sentiment |
-| Reddit | 1 hour | Subreddit sentiment (geopolitics, worldnews, politics) |
-| Polymarket | 1 hour | Cross-market price data |
+| Finnhub | 30 min | Financial news sentiment (FinBERT, general/forex/merger) |
+| Polymarket | 1 hour | Active market prices filtered by geopolitical tags |
 | Google Trends | 2 hours | Search volume for geopolitical keywords |
-| FiveThirtyEight | 6 hours | Polling averages |
 | FRED | 12 hours | US macro indicators (unemployment, CPI, yield curve) |
-| World Bank | Daily | GDP growth, debt, unemployment by country |
-| EIA | Daily | Crude oil and natural gas prices |
-| ACLED | Weekly | Armed conflict events and fatality rates |
+| World Bank | Daily | GDP growth, debt, unemployment, WGI governance indicators, energy imports |
+| EIA | Daily | Crude oil (WTI) and natural gas (Henry Hub) prices |
+| UNGA Votes | Weekly | Ideal point estimates (Harvard Dataverse) — policy predictability proxy |
 
 ---
 
@@ -36,11 +34,11 @@ Five dimensions, each scored 0–1 (higher = higher risk):
 
 | Dimension | Weight | Primary sources |
 |---|---|---|
-| Political stability | 25% | Polling averages, Reddit political sentiment |
-| Conflict intensity | 25% | ACLED events + fatalities, GDELT magnitude |
-| Policy predictability | 20% | Variance of forward-looking estimates |
-| Sanctions risk | 15% | GDELT negative tone, Google Trends |
-| Economic stress | 15% | FRED composite, World Bank indicators |
+| Political stability | 25% | WGI Political Stability, Voice & Accountability |
+| Conflict intensity | 25% | GDELT news magnitude |
+| Policy predictability | 20% | UNGA ideal point variance (last 10 years, Voeten dataset) |
+| Sanctions risk | 15% | GDELT news sentiment tone, Google Trends sanctions search volume |
+| Economic stress | 15% | FRED composite, World Bank macro + WGI governance, EIA energy prices weighted by import dependency, Finnhub sentiment |
 
 The composite score is the weighted sum. Validated against ICRG (Pearson r target > 0.65) and V-Dem (secondary benchmark).
 
@@ -58,22 +56,6 @@ The composite score is the weighted sum. Validated against ICRG (Pearson r targe
 ```bash
 pip install -e ".[dev]"
 ```
-
-### Configure
-
-```bash
-cp .env.example .env
-# Fill in your API keys
-```
-
-Minimum for core functionality:
-
-```
-KALSHI_API_KEY_ID=...
-KALSHI_PRIVATE_KEY_PATH=secrets/kalshi_private_key.pem
-```
-
-All other sources degrade gracefully if their key is missing.
 
 ---
 
@@ -153,7 +135,8 @@ exo/
 ├── scheduler.py           # APScheduler — all ingestion jobs
 ├── observability.py       # Structured logging and metrics
 │
-├── ingestion/             # 11 data source ingestors
+├── ingestion/             # 9 data source ingestors (gdelt, kalshi, finnhub, polymarket,
+│                          #  google_trends, fred, world_bank, eia, unga_votes)
 ├── store/
 │   ├── feature_store.py   # DuckDB + Parquet + Redis hot cache
 │   └── index_store.py     # Risk index persistence
