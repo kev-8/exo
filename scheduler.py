@@ -21,6 +21,7 @@ from exo.ingestion.google_trends import GoogleTrendsIngestor
 from exo.ingestion.kalshi import KalshiIngestor
 from exo.ingestion.polymarket import PolymarketIngestor
 from exo.ingestion.reddit import RedditIngestor
+from exo.ingestion.unga_votes import UNGAVotesIngestor
 from exo.ingestion.world_bank import WorldBankIngestor
 from exo.models import StalenessAlert
 from exo.risk_index.engine import RiskIndexEngine, COUNTRIES
@@ -51,6 +52,7 @@ class ExoScheduler:
         self.google_trends = GoogleTrendsIngestor(**_kwargs)
         self.reddit = RedditIngestor(**_kwargs)
         self.world_bank = WorldBankIngestor(**_kwargs)
+        self.unga_votes = UNGAVotesIngestor(**_kwargs)
         self.eia = EIAIngestor(**_kwargs)
         self.polymarket = PolymarketIngestor(**_kwargs)
         self.finnhub = FinnhubIngestor(**_kwargs)
@@ -109,6 +111,10 @@ class ExoScheduler:
         self._add_ingestor_job(self.eia, "eia_ingest",
                                trigger=CronTrigger(hour=6, minute=0, timezone="UTC"))
 
+        # UNGA Votes — weekly Monday 09:00 UTC
+        self._add_ingestor_job(self.unga_votes, "unga_votes_ingest",
+                               trigger=CronTrigger(day_of_week="mon", hour=9, minute=0, timezone="UTC"))
+
         # ACLED — weekly Monday 08:00 UTC
         self._add_ingestor_job(self.acled, "acled_ingest",
                                trigger=CronTrigger(day_of_week="mon", hour=8, minute=0, timezone="UTC"))
@@ -139,8 +145,8 @@ class ExoScheduler:
     async def _staleness_check(self) -> None:
         for source, threshold_sec in config.STALENESS_THRESHOLDS.items():
             rec = self.store.get_latest(
-                entity="*",
-                signal_type="*",
+                entity=None,
+                signal_type=None,
                 source=source,
                 max_age_sec=threshold_sec,
             )

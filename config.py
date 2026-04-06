@@ -56,6 +56,7 @@ STALENESS_THRESHOLDS: dict[str, float] = {
     "eia": 24 * 3600,
     "polymarket": 60 * 60,
     "acled": 7 * 24 * 3600,     # weekly
+    "unga_votes": 7 * 24 * 3600,  # weekly
 }
 
 # ---------------------------------------------------------------------------

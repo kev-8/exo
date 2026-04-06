@@ -8,8 +8,8 @@ selection strategies per event:
 
 from __future__ import annotations
 
+import json
 import logging
-from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -27,12 +27,21 @@ NEAR_TERM_DAYS = 30       # days — threshold for near-term markets
 NEAR_TERM_LIQUIDITY = 5000  # USD — higher bar for near-term markets
 
 
+def _liquidity(m: dict) -> float:
+    """Return liquidity as float, trying liquidityNum then liquidity field."""
+    val = m.get("liquidityNum") or m.get("liquidity")
+    try:
+        return float(val) if val is not None else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def _select_markets(markets: list[dict], now: datetime) -> list[dict]:
     """Select structural (longest-dated) and near-term (high-liquidity) markets."""
     selected: dict[str, dict] = {}  # market_id → market
 
     # Strategy 1: longest-dated market per event with liquidity > $500
-    liquid = [m for m in markets if (m.get("liquidityNum") or 0) > MIN_LIQUIDITY and m.get("endDateIso")]
+    liquid = [m for m in markets if _liquidity(m) > MIN_LIQUIDITY and m.get("endDateIso")]
     if liquid:
         longest = max(liquid, key=lambda m: m["endDateIso"])
         selected[str(longest.get("id", ""))] = longest
@@ -43,7 +52,7 @@ def _select_markets(markets: list[dict], now: datetime) -> list[dict]:
         m for m in markets
         if m.get("endDateIso")
         and m["endDateIso"] <= cutoff
-        and (m.get("liquidityNum") or 0) > NEAR_TERM_LIQUIDITY
+        and _liquidity(m) > NEAR_TERM_LIQUIDITY
     ]
     for m in near_term:
         selected[str(m.get("id", ""))] = m
@@ -115,6 +124,8 @@ class PolymarketIngestor(BaseIngestor):
             return []
 
         try:
+            if isinstance(outcome_prices, str):
+                outcome_prices = json.loads(outcome_prices)
             prices = [float(p) for p in outcome_prices]
             price = prices[0]  # first outcome (typically "Yes") probability
         except (ValueError, TypeError, IndexError):
@@ -137,8 +148,8 @@ class PolymarketIngestor(BaseIngestor):
                     "question": str(d.get("question", ""))[:200],
                     "event_title": str(d.get("event_title", ""))[:200],
                     "tag": d.get("tag"),
-                    "volume": d.get("volumeNum"),
-                    "liquidity": d.get("liquidityNum"),
+                    "volume": d.get("volumeNum") or d.get("volume"),
+                    "liquidity": _liquidity(d),
                     "end_date": end_date,
                     "near_term": is_near_term,
                 },
