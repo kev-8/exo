@@ -24,11 +24,19 @@ except ImportError:
     logger.warning("gdeltdoc not installed; GDELTIngestor will return no data")
 
 
-# Countries of interest mapped to GDELT location filter strings
-COUNTRIES_OF_INTEREST = [
-    "United States", "Russia", "China", "Ukraine", "Israel",
-    "Iranian", "North Korea", "Taiwan", "India", "Pakistan",
-]
+# Maps ISO country code → GDELT search keyword
+COUNTRY_KEYWORD_MAP: dict[str, str] = {
+    "US": "United States",
+    "RU": "Russia",
+    "CN": "China",
+    "UA": "Ukraine",
+    "IL": "Israel",
+    "IR": "Iranian",
+    "KP": "North Korea",
+    "TW": "Taiwan",
+    "IN": "India",
+    "PK": "Pakistan",
+}
 
 # Simple positive / negative word lists for naive sentiment scoring
 _POS = {"peace", "agreement", "ceasefire", "deal", "election", "growth", "recovery"}
@@ -63,9 +71,9 @@ class GDELTIngestor(BaseIngestor):
 
     source = "gdelt"
 
-    def __init__(self, countries: list[str] | None = None, **kwargs) -> None:
+    def __init__(self, countries: dict[str, str] | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.countries = countries or COUNTRIES_OF_INTEREST
+        self.countries = countries or COUNTRY_KEYWORD_MAP
         self._client = GdeltDoc() if _GDELT_AVAILABLE else None
 
     async def fetch(self) -> list[RawRecord]:
@@ -78,11 +86,11 @@ class GDELTIngestor(BaseIngestor):
 
         loop = asyncio.get_event_loop()
 
-        for country in self.countries:
+        for iso_code, keyword in self.countries.items():
             end_date = (now - timedelta(days=1)).strftime("%Y-%m-%d")
             start_date = (now - timedelta(days=2)).strftime("%Y-%m-%d")
             f = Filters(
-                keyword=country,
+                keyword=keyword,
                 start_date=start_date,
                 end_date=end_date,
                 num_records=10,
@@ -96,7 +104,7 @@ class GDELTIngestor(BaseIngestor):
                     )
                     break
                 except Exception as exc:
-                    logger.warning("GDELT fetch attempt %d failed for %s: %s", attempt + 1, country, exc)
+                    logger.warning("GDELT fetch attempt %d failed for %s: %s", attempt + 1, iso_code, exc)
                     await asyncio.sleep(5 * (attempt + 1))
 
             if articles is None or (hasattr(articles, "empty") and articles.empty):
@@ -115,7 +123,7 @@ class GDELTIngestor(BaseIngestor):
                 raws.append(
                     RawRecord(
                         source=self.source,
-                        entity=country,
+                        entity=iso_code,
                         raw=raw,
                         fetched_at=now,
                     )
