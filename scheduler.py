@@ -12,7 +12,6 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from exo import config
 from exo.event_bus import get_bus
-from exo.ingestion.acled import ACLEDIngestor
 from exo.ingestion.eia import EIAIngestor
 from exo.ingestion.finnhub import FinnhubIngestor
 from exo.ingestion.fred import FREDIngestor
@@ -20,7 +19,6 @@ from exo.ingestion.gdelt import GDELTIngestor
 from exo.ingestion.google_trends import GoogleTrendsIngestor
 from exo.ingestion.kalshi import KalshiIngestor
 from exo.ingestion.polymarket import PolymarketIngestor
-from exo.ingestion.reddit import RedditIngestor
 from exo.ingestion.unga_votes import UNGAVotesIngestor
 from exo.ingestion.world_bank import WorldBankIngestor
 from exo.models import StalenessAlert
@@ -47,10 +45,8 @@ class ExoScheduler:
         _kwargs = {"store": self.store, "bus": self.bus}
         self.gdelt = GDELTIngestor(**_kwargs)
         self.kalshi = KalshiIngestor(**_kwargs)
-        self.acled = ACLEDIngestor(**_kwargs)
         self.fred = FREDIngestor(**_kwargs)
         self.google_trends = GoogleTrendsIngestor(**_kwargs)
-        self.reddit = RedditIngestor(**_kwargs)
         self.world_bank = WorldBankIngestor(**_kwargs)
         self.unga_votes = UNGAVotesIngestor(**_kwargs)
         self.eia = EIAIngestor(**_kwargs)
@@ -87,10 +83,6 @@ class ExoScheduler:
         self._add_ingestor_job(self.finnhub, "finnhub_ingest",
                                trigger=IntervalTrigger(minutes=30))
 
-        # Reddit — every 1 hour
-        self._add_ingestor_job(self.reddit, "reddit_ingest",
-                               trigger=IntervalTrigger(hours=1))
-
         # Polymarket — every 1 hour
         self._add_ingestor_job(self.polymarket, "polymarket_ingest",
                                trigger=IntervalTrigger(hours=1))
@@ -114,10 +106,6 @@ class ExoScheduler:
         # UNGA Votes — weekly Monday 09:00 UTC
         self._add_ingestor_job(self.unga_votes, "unga_votes_ingest",
                                trigger=CronTrigger(day_of_week="mon", hour=9, minute=0, timezone="UTC"))
-
-        # ACLED — weekly Monday 08:00 UTC
-        self._add_ingestor_job(self.acled, "acled_ingest",
-                               trigger=CronTrigger(day_of_week="mon", hour=8, minute=0, timezone="UTC"))
 
         # Risk index update — every 6 hours
         self._scheduler.add_job(
