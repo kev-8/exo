@@ -25,61 +25,38 @@ class TestGDELTNormalise:
         from exo.ingestion.gdelt import GDELTIngestor
         return GDELTIngestor.__new__(GDELTIngestor)  # no store/bus needed for normalise
 
-    def test_tone_and_magnitude(self, ingestor):
+    def test_sentiment_record_emitted(self, ingestor):
         raw = _raw("gdelt", "RU", {
-            "tone_score": -0.35, "article_count": 28,
+            "tone_score": -0.35,
             "keyword": "Russia", "start_date": "2026-04-04", "end_date": "2026-04-05",
         })
         records = ingestor.normalise(raw)
-        assert len(records) == 2
-        types = {r.signal_type for r in records}
-        assert types == {"news_sentiment", "news_magnitude"}
+        assert len(records) == 1
+        assert records[0].signal_type == "news_sentiment"
 
     def test_sentiment_value(self, ingestor):
         raw = _raw("gdelt", "IL", {
-            "tone_score": -0.40, "article_count": 50,
+            "tone_score": -0.40,
             "keyword": "Israel", "start_date": "2026-04-04", "end_date": "2026-04-05",
         })
         records = ingestor.normalise(raw)
-        sent = next(r for r in records if r.signal_type == "news_sentiment")
-        assert abs(sent.value - (-0.40)) < 1e-6
+        assert abs(records[0].value - (-0.40)) < 1e-6
 
-    def test_magnitude_normalised(self, ingestor):
+    def test_missing_tone_returns_empty(self, ingestor):
+        raw = _raw("gdelt", "CN", {
+            "tone_score": None,
+            "keyword": "China", "start_date": "2026-04-04", "end_date": "2026-04-05",
+        })
+        assert ingestor.normalise(raw) == []
+
+    def test_source_and_entity(self, ingestor):
         raw = _raw("gdelt", "UA", {
-            "tone_score": -0.20, "article_count": 25,
+            "tone_score": -0.25,
             "keyword": "Ukraine", "start_date": "2026-04-04", "end_date": "2026-04-05",
         })
         records = ingestor.normalise(raw)
-        mag = next(r for r in records if r.signal_type == "news_magnitude")
-        assert abs(mag.value - 0.5) < 1e-6  # 25 / MAX_ARTICLE_COUNT(50)
-
-    def test_magnitude_capped_at_one(self, ingestor):
-        raw = _raw("gdelt", "US", {
-            "tone_score": 0.0, "article_count": 200,
-            "keyword": "United States", "start_date": "2026-04-04", "end_date": "2026-04-05",
-        })
-        records = ingestor.normalise(raw)
-        mag = next(r for r in records if r.signal_type == "news_magnitude")
-        assert mag.value == 1.0
-
-    def test_missing_tone_emits_magnitude_only(self, ingestor):
-        raw = _raw("gdelt", "CN", {
-            "tone_score": None, "article_count": 10,
-            "keyword": "China", "start_date": "2026-04-04", "end_date": "2026-04-05",
-        })
-        records = ingestor.normalise(raw)
-        types = {r.signal_type for r in records}
-        assert types == {"news_magnitude"}
-        assert "news_sentiment" not in types
-
-    def test_zero_article_count(self, ingestor):
-        raw = _raw("gdelt", "KP", {
-            "tone_score": -0.1, "article_count": 0,
-            "keyword": "North Korea", "start_date": "2026-04-04", "end_date": "2026-04-05",
-        })
-        records = ingestor.normalise(raw)
-        mag = next(r for r in records if r.signal_type == "news_magnitude")
-        assert mag.value == 0.0
+        assert records[0].source == "gdelt"
+        assert records[0].entity == "UA"
 
 
 # ---------------------------------------------------------------------------

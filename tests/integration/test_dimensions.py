@@ -78,16 +78,10 @@ class TestConflictIntensity:
         dim = scorer.conflict_intensity("XX", _now())
         assert abs(dim.score - 0.3) < 1e-6
 
-    def test_gdelt_magnitude_zero_not_added(self, scorer, store):
-        # magnitude=0.0 must not be appended (it would mask the 0.3 default)
-        _write(store, "gdelt", "US", "news_magnitude", 0.0)
+    def test_no_signals_defaults_to_0_3(self, scorer, store):
+        # With no ACLED or GDELT magnitude data, score stays at 0.3
         dim = scorer.conflict_intensity("US", _now())
         assert abs(dim.score - 0.3) < 1e-6
-
-    def test_gdelt_magnitude_nonzero_used(self, scorer, store):
-        _write(store, "gdelt", "UA", "news_magnitude", 0.8)
-        dim = scorer.conflict_intensity("UA", _now())
-        assert abs(dim.score - 0.8) < 1e-6
 
     def test_weight(self, scorer):
         dim = scorer.conflict_intensity("XX", _now())
@@ -225,7 +219,6 @@ class TestCompositeWeights:
 
     def test_all_scores_in_range(self, scorer, store):
         _write(store, "world_bank", "IL", "political_stability", 0.4)
-        _write(store, "gdelt", "IL", "news_magnitude", 0.9)
         _write(store, "gdelt", "IL", "news_sentiment", -0.35)
         _write(store, "unga_votes", "IL", "ideal_point_variance", 0.44)
         _write(store, "eia", "WTI", "crude_oil_price", 75.0)
