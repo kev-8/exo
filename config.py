@@ -57,7 +57,8 @@ STALENESS_THRESHOLDS: dict[str, float] = {
     "polymarket": 60 * 60,
     "acled": 7 * 24 * 3600,          # weekly
     "unga_votes": 7 * 24 * 3600,     # weekly
-    "wits": 24 * 3600,               # daily poll, annual data
+    "wits": 7 * 24 * 3600,           # weekly poll, annual data
+    "ofac": 7 * 24 * 3600,           # weekly poll (SDN list updated frequently)
     "ucdp_ged": 7 * 24 * 3600,       # weekly poll, annual releases
     "ucdp_candidate": 7 * 24 * 3600, # weekly poll, quarterly revisions
 }
@@ -80,9 +81,14 @@ DIMENSION_TIER_WEIGHTS: dict[str, dict[str, float]] = {
     "political_stability":   {"structural": 1.0, "short_term": 0.0, "acute": 0.0},
     "conflict_intensity":    {"structural": 0.3, "short_term": 0.4, "acute": 0.3},
     "policy_predictability": {"structural": 1.0, "short_term": 0.0, "acute": 0.0},
-    "sanctions_risk":        {"structural": 0.5, "short_term": 0.0, "acute": 0.5},
+    "sanctions_risk":        {"structural": 0.4, "short_term": 0.2, "acute": 0.4},
     "economic_stress":       {"structural": 0.3, "short_term": 0.4, "acute": 0.3},
 }
+
+# Minimum normalised SDN score for a country to be included as a bilateral
+# trade partner in the WITS secondary_exposure query. Derived from OFAC data
+# at fetch() time — no hardcoded sanctioned-country list.
+SDN_BILATERAL_THRESHOLD: float = float(os.getenv("SDN_BILATERAL_THRESHOLD", "0.05"))
 
 # ---------------------------------------------------------------------------
 # Validation benchmarks

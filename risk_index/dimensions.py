@@ -244,7 +244,7 @@ class DimensionScorer:
     # ------------------------------------------------------------------
 
     def sanctions_risk(self, country: str, now: datetime) -> DimensionScore:
-        # Structural: trade openness + bilateral trade concentration (WITS)
+        # Structural: trade openness + trade concentration (US/EU) + secondary exposure
         s_scores: list[float] = []
         s_signals: list[str] = []
 
@@ -272,6 +272,34 @@ class DimensionScorer:
                 f" eu={concentration_rec.metadata.get('eu_pct', '?'):.2f})"
             )
 
+        secondary_rec = self.store.get_latest(
+            entity=country, signal_type="secondary_exposure",
+            source="wits", as_of_ts=now,
+        )
+        if secondary_rec:
+            s_scores.append(_safe(secondary_rec.value))
+            sanctioned_b = secondary_rec.metadata.get("sanctioned_weighted_usd", 0) / 1e9
+            s_signals.append(
+                f"secondary_exposure={secondary_rec.value:.3f}"
+                f" (sanctioned_weighted=${sanctioned_b:.1f}B"
+                f" n={secondary_rec.metadata.get('n_sanctioned_partners', '?')})"
+            )
+
+        # Short-term: OFAC SDN entity count (reflects active US enforcement attention)
+        st_scores: list[float] = []
+        st_signals: list[str] = []
+
+        sdn_rec = self.store.get_latest(
+            entity=country, signal_type="sdn_entity_count",
+            source="ofac", as_of_ts=now,
+        )
+        if sdn_rec:
+            st_scores.append(_safe(sdn_rec.value))
+            st_signals.append(
+                f"sdn_count={sdn_rec.value:.3f}"
+                f" (raw={sdn_rec.metadata.get('raw_count', '?')})"
+            )
+
         # Acute: GDELT negative sentiment tone + Google Trends sanctions search
         a_scores: list[float] = []
         a_signals: list[str] = []
@@ -295,11 +323,11 @@ class DimensionScorer:
 
         tier_scores = {
             "structural": _tier_score("structural", s_scores, s_signals, default=0.3),
-            "short_term": _tier_score("short_term", [], []),
+            "short_term": _tier_score("short_term", st_scores, st_signals, default=0.3),
             "acute":      _tier_score("acute", a_scores, a_signals, default=0.3),
         }
         score = _blend_tiers("sanctions_risk", tier_scores)
-        all_signals = s_signals + a_signals
+        all_signals = s_signals + st_signals + a_signals
         return DimensionScore(
             name="sanctions_risk",
             score=score,

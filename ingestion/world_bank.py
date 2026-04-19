@@ -26,6 +26,8 @@ INDICATORS: dict[str, tuple[str, int]] = {
     "RL.EST": ("rule_of_law", -1),                       # WGI: Rule of Law (-2.5 to 2.5)
     "CC.EST": ("control_of_corruption", -1),             # WGI: Control of Corruption (-2.5 to 2.5)
     "EG.IMP.CONS.ZS": ("energy_imports_pct", 1),        # Energy imports as % of total energy use
+    "NE.EXP.GNFS.ZS": ("exports_pct_gdp", -1),         # Exports of goods & services (% of GDP)
+    "NE.IMP.GNFS.ZS": ("imports_pct_gdp", 1),           # Imports of goods & services (% of GDP)
 }
 
 COUNTRIES = ["US", "RU", "CN", "UA", "IL", "IR", "IN", "PK"]
@@ -101,6 +103,26 @@ class WorldBankIngestor(BaseIngestor):
                     signal_type=signal_type,
                     value=store_val,
                     metadata={"indicator_id": indicator_id, "stress_sign": sign},
+                    as_of_ts=now,
+                )
+            )
+
+        # Derive trade openness: (exports % GDP + imports % GDP) / 200
+        # Sums to ~20% for closed economies, ~300%+ for entrepôt hubs; cap at 1.0
+        exp_val = raw.raw.get("NE.EXP.GNFS.ZS")
+        imp_val = raw.raw.get("NE.IMP.GNFS.ZS")
+        if exp_val is not None and imp_val is not None:
+            openness_normalised = min(1.0, (float(exp_val) + float(imp_val)) / 200.0)
+            records.append(
+                FeatureRecord(
+                    source=self.source,
+                    entity=raw.entity,
+                    signal_type="trade_openness",
+                    value=openness_normalised,
+                    metadata={
+                        "exports_pct_gdp": float(exp_val),
+                        "imports_pct_gdp": float(imp_val),
+                    },
                     as_of_ts=now,
                 )
             )
