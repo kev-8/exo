@@ -83,13 +83,23 @@ class KalshiMarket:
 
 
 @dataclass
+class TierScore:
+    """Score for one time-horizon tier within a risk dimension."""
+
+    tier: str                     # "structural" | "short_term" | "acute"
+    score: float                  # 0.0 – 1.0 (higher = higher risk)
+    contributing_signals: list[str]
+
+
+@dataclass
 class DimensionScore:
     """Score for one risk dimension."""
 
     name: str
-    score: float                  # 0.0 – 1.0 (higher = higher risk)
+    score: float                  # 0.0 – 1.0 — weighted blend of tier scores
     weight: float
     contributing_signals: list[str]
+    tier_scores: dict[str, TierScore] = field(default_factory=dict)
 
 
 @dataclass
@@ -100,6 +110,9 @@ class RiskIndexSnapshot:
     composite_score: float        # weighted sum of dimension scores
     dimensions: list[DimensionScore]
     as_of_ts: datetime
+    structural_score: float = 0.5    # weighted composite of structural-tier signals only
+    short_term_score: float = 0.5    # weighted composite of short-term-tier signals only
+    acute_score: float = 0.5         # weighted composite of acute-tier signals only
     computed_at: datetime = field(default_factory=datetime.utcnow)
     snapshot_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 

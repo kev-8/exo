@@ -19,7 +19,9 @@ from exo.ingestion.gdelt import GDELTIngestor
 from exo.ingestion.google_trends import GoogleTrendsIngestor
 from exo.ingestion.kalshi import KalshiIngestor
 from exo.ingestion.polymarket import PolymarketIngestor
+from exo.ingestion.ucdp import UCDPCandidateIngestor, UCDPGEDIngestor
 from exo.ingestion.unga_votes import UNGAVotesIngestor
+from exo.ingestion.wits import WITSIngestor
 from exo.ingestion.world_bank import WorldBankIngestor
 from exo.models import StalenessAlert
 from exo.risk_index.engine import RiskIndexEngine, COUNTRIES
@@ -52,6 +54,9 @@ class ExoScheduler:
         self.eia = EIAIngestor(**_kwargs)
         self.polymarket = PolymarketIngestor(**_kwargs)
         self.finnhub = FinnhubIngestor(**_kwargs)
+        self.wits = WITSIngestor(**_kwargs)
+        self.ucdp_ged = UCDPGEDIngestor(**_kwargs)
+        self.ucdp_candidate = UCDPCandidateIngestor(**_kwargs)
 
         self.risk_index = RiskIndexEngine(store=self.store)
 
@@ -106,6 +111,18 @@ class ExoScheduler:
         # UNGA Votes — weekly Monday 09:00 UTC
         self._add_ingestor_job(self.unga_votes, "unga_votes_ingest",
                                trigger=CronTrigger(day_of_week="mon", hour=9, minute=0, timezone="UTC"))
+
+        # WITS bilateral trade concentration — daily at 07:00 UTC (after world_bank)
+        self._add_ingestor_job(self.wits, "wits_ingest",
+                               trigger=CronTrigger(hour=7, minute=0, timezone="UTC"))
+
+        # UCDP GED (structural conflict) — weekly Monday 08:00 UTC
+        self._add_ingestor_job(self.ucdp_ged, "ucdp_ged_ingest",
+                               trigger=CronTrigger(day_of_week="mon", hour=8, minute=0, timezone="UTC"))
+
+        # UCDP Candidate (short-term conflict) — weekly Monday 09:30 UTC
+        self._add_ingestor_job(self.ucdp_candidate, "ucdp_candidate_ingest",
+                               trigger=CronTrigger(day_of_week="mon", hour=9, minute=30, timezone="UTC"))
 
         # Risk index update — every 6 hours
         self._scheduler.add_job(

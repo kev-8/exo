@@ -28,6 +28,7 @@ KALSHI_WS_URL: str = os.getenv(
 )
 
 FRED_API_KEY: str = os.getenv("FRED_API_KEY", "")
+WITS_API_KEY: str = os.getenv("WITS_API_KEY", "")
 ACLED_API_KEY: str = os.getenv("ACLED_API_KEY", "")
 ACLED_EMAIL: str = os.getenv("ACLED_EMAIL", "")
 
@@ -54,8 +55,11 @@ STALENESS_THRESHOLDS: dict[str, float] = {
     "world_bank": 24 * 3600,
     "eia": 24 * 3600,
     "polymarket": 60 * 60,
-    "acled": 7 * 24 * 3600,     # weekly
-    "unga_votes": 7 * 24 * 3600,  # weekly
+    "acled": 7 * 24 * 3600,          # weekly
+    "unga_votes": 7 * 24 * 3600,     # weekly
+    "wits": 24 * 3600,               # daily poll, annual data
+    "ucdp_ged": 7 * 24 * 3600,       # weekly poll, annual releases
+    "ucdp_candidate": 7 * 24 * 3600, # weekly poll, quarterly revisions
 }
 
 # ---------------------------------------------------------------------------
@@ -68,6 +72,16 @@ DIMENSION_WEIGHTS: dict[str, float] = {
     "policy_predictability": 0.20,
     "sanctions_risk": 0.15,
     "economic_stress": 0.15,
+}
+
+# Tier weights per dimension — controls how structural / short_term / acute
+# sub-scores blend into the dimension's final score.
+DIMENSION_TIER_WEIGHTS: dict[str, dict[str, float]] = {
+    "political_stability":   {"structural": 1.0, "short_term": 0.0, "acute": 0.0},
+    "conflict_intensity":    {"structural": 0.3, "short_term": 0.4, "acute": 0.3},
+    "policy_predictability": {"structural": 1.0, "short_term": 0.0, "acute": 0.0},
+    "sanctions_risk":        {"structural": 0.5, "short_term": 0.0, "acute": 0.5},
+    "economic_stress":       {"structural": 0.3, "short_term": 0.4, "acute": 0.3},
 }
 
 # ---------------------------------------------------------------------------

@@ -39,6 +39,20 @@ class RiskIndexEngine:
         self.index_store = index_store or IndexStore()
         self._scorer = DimensionScorer(store=self.store)
 
+    @staticmethod
+    def _tier_composite(dimensions: list, tier: str) -> float:
+        """Weighted composite of one tier's scores across all dimensions."""
+        total_weight = sum(
+            d.weight for d in dimensions if tier in d.tier_scores
+        )
+        if total_weight == 0:
+            return 0.5
+        return round(
+            sum(d.tier_scores[tier].score * d.weight for d in dimensions if tier in d.tier_scores)
+            / total_weight,
+            4,
+        )
+
     def update(self, country: str, as_of_ts: datetime | None = None) -> None:
         """Compute a RiskIndexSnapshot for *country* and persist it."""
         now = as_of_ts or datetime.now(timezone.utc)
@@ -47,14 +61,25 @@ class RiskIndexEngine:
         dimensions = self._scorer.score_all(country, as_of_ts=now)
         composite = sum(d.score * d.weight for d in dimensions)
 
+        structural = self._tier_composite(dimensions, "structural")
+        short_term = self._tier_composite(dimensions, "short_term")
+        acute = self._tier_composite(dimensions, "acute")
+
         snapshot = RiskIndexSnapshot(
             country=country,
             composite_score=round(composite, 4),
+            structural_score=structural,
+            short_term_score=short_term,
+            acute_score=acute,
             dimensions=dimensions,
             as_of_ts=now,
         )
         self.index_store.write(snapshot)
-        logger.info("RiskIndexSnapshot written: country=%s composite=%.4f", country, composite)
+        logger.info(
+            "RiskIndexSnapshot written: country=%s composite=%.4f "
+            "structural=%.4f short_term=%.4f acute=%.4f",
+            country, composite, structural, short_term, acute,
+        )
 
     def update_all(self, countries: list[str] | None = None, as_of_ts: datetime | None = None) -> None:
         """Update risk index for all tracked countries."""
