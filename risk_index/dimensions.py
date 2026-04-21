@@ -177,19 +177,6 @@ class DimensionScorer:
             a_scores.append(_safe(gdelt_rec.value))
             a_signals.append(f"gdelt_magnitude={gdelt_rec.value:.3f}")
 
-        # ACLED (pending institutional approval — included for future use)
-        week_ago = now - timedelta(days=7)
-        acled_recs = self.store.read(FeatureQuery(
-            entity=country, signal_type="conflict_event", source="acled",
-            as_of_ts=now, start_ts=week_ago, limit=200,
-        ))
-        if acled_recs:
-            mean_intensity = sum(r.value for r in acled_recs) / len(acled_recs)
-            total_fatalities = sum(r.metadata.get("fatalities", 0) for r in acled_recs)
-            normalised_fatalities = min(1.0, total_fatalities / 1000.0)
-            a_scores.append((mean_intensity + normalised_fatalities) / 2)
-            a_signals.append(f"acled_events={len(acled_recs)} fatalities={total_fatalities:.0f}")
-
         tier_scores = {
             "structural": _tier_score("structural", s_scores, s_signals, default=0.3),
             "short_term": _tier_score("short_term", st_scores, st_signals, default=0.3),

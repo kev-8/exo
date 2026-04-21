@@ -28,14 +28,7 @@ KALSHI_WS_URL: str = os.getenv(
 )
 
 FRED_API_KEY: str = os.getenv("FRED_API_KEY", "")
-ACLED_API_KEY: str = os.getenv("ACLED_API_KEY", "")
-ACLED_EMAIL: str = os.getenv("ACLED_EMAIL", "")
-
 FINNHUB_API_KEY: str = os.getenv("FINNHUB_API_KEY", "")
-
-REDDIT_CLIENT_ID: str = os.getenv("REDDIT_CLIENT_ID", "")
-REDDIT_CLIENT_SECRET: str = os.getenv("REDDIT_CLIENT_SECRET", "")
-REDDIT_USER_AGENT: str = os.getenv("REDDIT_USER_AGENT", "exo-bot/1.0")
 
 EIA_API_KEY: str = os.getenv("EIA_API_KEY", "")
 
