@@ -200,10 +200,14 @@ class KalshiIngestor(BaseIngestor):
             logger.warning("websockets not installed; skipping WebSocket connection")
             return
 
+        from urllib.parse import urlparse
+        ws_path = urlparse(config.KALSHI_WS_URL).path
+
         backoff = 1
         while True:
             try:
-                async with websockets.connect(config.KALSHI_WS_URL) as ws:
+                auth_headers = _build_auth_headers("GET", ws_path)
+                async with websockets.connect(config.KALSHI_WS_URL, additional_headers=auth_headers) as ws:
                     logger.info("Kalshi WebSocket connected")
                     backoff = 1
                     # Subscribe to orderbook deltas
