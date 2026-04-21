@@ -309,8 +309,7 @@ class DimensionScorer:
             source="gdelt", as_of_ts=now,
         )
         if gdelt_rec:
-            sanctions_score = max(0.0, min(1.0, (1.0 - gdelt_rec.value) / 2))
-            a_scores.append(sanctions_score)
+            a_scores.append(_safe(gdelt_rec.value))
             a_signals.append(f"gdelt_sentiment={gdelt_rec.value:.3f}")
 
         gt_rec = self.store.get_latest(
@@ -421,8 +420,7 @@ class DimensionScorer:
                 source="finnhub", as_of_ts=now,
             )
             if finnhub_rec:
-                stress = (1.0 - _safe(finnhub_rec.value)) / 2
-                a_scores.append(stress)
+                a_scores.append(_safe(finnhub_rec.value))
                 a_signals.append(f"finnhub_{category}={finnhub_rec.value:.3f}")
 
         # Polymarket near-term markets (near_term flag set by ingestor)

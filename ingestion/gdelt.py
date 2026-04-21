@@ -113,13 +113,16 @@ class GDELTIngestor(BaseIngestor):
         if tone_score is None:
             return []
 
+        # Normalise to [0, 1]: negative tone (high risk) → score near 1.0
+        risk_score = max(0.0, min(1.0, (1.0 - float(tone_score)) / 2.0))
+
         return [
             FeatureRecord(
                 source=self.source,
                 entity=raw.entity,
                 signal_type="news_sentiment",
-                value=float(tone_score),
-                metadata={"keyword": d.get("keyword"), "window": f"{d.get('start_date')}:{d.get('end_date')}"},
+                value=risk_score,
+                metadata={"keyword": d.get("keyword"), "window": f"{d.get('start_date')}:{d.get('end_date')}", "raw_tone": float(tone_score)},
                 as_of_ts=now,
             )
         ]

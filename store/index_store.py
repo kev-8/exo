@@ -14,7 +14,7 @@ import duckdb
 import pandas as pd
 
 from exo import config
-from exo.models import DimensionScore, RiskIndexSnapshot
+from exo.models import DimensionScore, RiskIndexSnapshot, TierScore
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,10 @@ class IndexStore:
                 "score": d.score,
                 "weight": d.weight,
                 "signals": json.dumps(d.contributing_signals),
+                "tier_scores": json.dumps({
+                    tier: {"score": ts.score, "signals": ts.contributing_signals}
+                    for tier, ts in d.tier_scores.items()
+                }),
             }
             for d in snapshot.dimensions
         ]
@@ -55,6 +59,9 @@ class IndexStore:
             "snapshot_id": snapshot.snapshot_id,
             "country": snapshot.country,
             "composite_score": snapshot.composite_score,
+            "structural_score": snapshot.structural_score,
+            "short_term_score": snapshot.short_term_score,
+            "acute_score": snapshot.acute_score,
             "dimensions": json.dumps(dims),
             "as_of_ts": snapshot.as_of_ts.isoformat(),
             "computed_at": snapshot.computed_at.isoformat(),
@@ -102,15 +109,24 @@ class IndexStore:
         snapshots = []
         for _, row in df.iterrows():
             dims_raw = json.loads(row["dimensions"])
-            dims = [
-                DimensionScore(
+            dims = []
+            for d in dims_raw:
+                raw_tiers = json.loads(d.get("tier_scores") or "{}")
+                tier_scores = {
+                    tier: TierScore(
+                        tier=tier,
+                        score=v["score"],
+                        contributing_signals=v.get("signals", []),
+                    )
+                    for tier, v in raw_tiers.items()
+                }
+                dims.append(DimensionScore(
                     name=d["name"],
                     score=d["score"],
                     weight=d["weight"],
                     contributing_signals=json.loads(d["signals"]),
-                )
-                for d in dims_raw
-            ]
+                    tier_scores=tier_scores,
+                ))
             as_of = row["as_of_ts"]
             if hasattr(as_of, "to_pydatetime"):
                 as_of = as_of.to_pydatetime()
@@ -119,6 +135,9 @@ class IndexStore:
                     snapshot_id=str(row["snapshot_id"]),
                     country=str(row["country"]),
                     composite_score=float(row["composite_score"]),
+                    structural_score=float(row.get("structural_score", 0.5)),
+                    short_term_score=float(row.get("short_term_score", 0.5)),
+                    acute_score=float(row.get("acute_score", 0.5)),
                     dimensions=dims,
                     as_of_ts=as_of,
                     computed_at=datetime.fromisoformat(str(row["computed_at"])),

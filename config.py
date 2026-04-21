@@ -28,7 +28,6 @@ KALSHI_WS_URL: str = os.getenv(
 )
 
 FRED_API_KEY: str = os.getenv("FRED_API_KEY", "")
-WITS_API_KEY: str = os.getenv("WITS_API_KEY", "")
 ACLED_API_KEY: str = os.getenv("ACLED_API_KEY", "")
 ACLED_EMAIL: str = os.getenv("ACLED_EMAIL", "")
 

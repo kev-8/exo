@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from exo.models import FeatureRecord
+from exo.models import FeatureRecord, TierScore
 from exo.risk_index.dimensions import DimensionScorer
 from exo.store.feature_store import FeatureStore
 
@@ -132,23 +132,78 @@ class TestSanctionsRisk:
         assert abs(dim.score - 0.3) < 1e-6
 
     def test_negative_gdelt_tone_raises_risk(self, scorer, store):
-        # sentiment=-0.4 → sanctions_score = (1 - (-0.4)) / 2 = 0.7
-        _write(store, "gdelt", "IR", "news_sentiment", -0.4)
+        # ingestor normalises: raw tone=-0.4 → stored value=(1-(-0.4))/2=0.7
+        # acute=0.7; structural default=0.3; short_term default=0.3
+        # blended = 0.4*0.3 + 0.2*0.3 + 0.4*0.7 = 0.12+0.06+0.28 = 0.46
+        _write(store, "gdelt", "IR", "news_sentiment", 0.7)
         dim = scorer.sanctions_risk("IR", _now())
-        assert dim.score > 0.5
+        assert dim.score > 0.3  # elevated above structural-only default
 
     def test_positive_gdelt_tone_lowers_risk(self, scorer, store):
-        _write(store, "gdelt", "US", "news_sentiment", 0.5)
+        # ingestor normalises: raw tone=0.5 → stored value=(1-0.5)/2=0.25
+        # acute=0.25; structural default=0.3; short_term default=0.3
+        # blended = 0.4*0.3 + 0.2*0.3 + 0.4*0.25 = 0.12+0.06+0.10 = 0.28
+        _write(store, "gdelt", "US", "news_sentiment", 0.25)
         dim = scorer.sanctions_risk("US", _now())
         assert dim.score < 0.4
 
     def test_google_trends_combined(self, scorer, store):
-        _write(store, "gdelt", "RU", "news_sentiment", -0.3)
+        # ingestor normalises: raw tone=-0.3 → stored value=0.65; google_trends→0.8
+        # acute_avg=(0.65+0.8)/2=0.725; structural=0.3, short_term=0.3
+        # blended = 0.4*0.3 + 0.2*0.3 + 0.4*0.725 = 0.12+0.06+0.29 = 0.47
+        _write(store, "gdelt", "RU", "news_sentiment", 0.65)
         _write(store, "google_trends", "sanctions", "search_volume", 0.8)
         dim = scorer.sanctions_risk("RU", _now())
-        # sanctions_score(gdelt) = (1 - (-0.3)) / 2 = 0.65
-        # combined = (0.65 + 0.8) / 2 = 0.725
-        assert abs(dim.score - 0.725) < 1e-4
+        assert abs(dim.score - 0.47) < 1e-4
+
+    def test_structural_signals_included(self, scorer, store):
+        # trade_openness=0.8, trade_concentration=0.6 → structural avg=0.7
+        # short_term=0.3, acute=0.3
+        # blended = 0.4*0.7 + 0.2*0.3 + 0.4*0.3 = 0.28+0.06+0.12 = 0.46
+        _write(store, "world_bank", "CN", "trade_openness", 0.8,
+               metadata={"exports_pct_gdp": 20.0, "imports_pct_gdp": 140.0})
+        _write(store, "wits", "CN", "trade_concentration", 0.6,
+               metadata={"us_pct": 0.4, "eu_pct": 0.2, "world_total_usd": 5e12})
+        dim = scorer.sanctions_risk("CN", _now())
+        assert dim.tier_scores["structural"].score > 0.5
+        assert abs(dim.score - 0.46) < 1e-4
+
+    def test_tier_scores_populated(self, scorer, store):
+        # ingestor normalises: raw tone=-0.2 → stored value=0.6
+        _write(store, "gdelt", "IL", "news_sentiment", 0.6)
+        dim = scorer.sanctions_risk("IL", _now())
+        assert set(dim.tier_scores.keys()) == {"structural", "short_term", "acute"}
+        assert all(isinstance(ts, TierScore) for ts in dim.tier_scores.values())
+
+    def test_sdn_entity_count_in_short_term_tier(self, scorer, store):
+        _write(store, "ofac", "RU", "sdn_entity_count", 0.85,
+               metadata={"raw_count": 3200, "rolling_max": 3200.0})
+        dim = scorer.sanctions_risk("RU", _now())
+        assert dim.tier_scores["short_term"].score == 0.85
+        assert any("sdn_count" in s for s in dim.tier_scores["short_term"].contributing_signals)
+
+    def test_secondary_exposure_in_structural_tier(self, scorer, store):
+        _write(store, "wits", "CN", "secondary_exposure", 0.35,
+               metadata={"sanctioned_weighted_usd": 1.5e11, "world_total_usd": 4e12, "n_sanctioned_partners": 3})
+        dim = scorer.sanctions_risk("CN", _now())
+        assert any("secondary_exposure" in s for s in dim.tier_scores["structural"].contributing_signals)
+
+    def test_all_signals_combined(self, scorer, store):
+        # structural: openness=0.6, concentration=0.5, secondary=0.4 → avg=0.5
+        # short_term: sdn=0.7
+        # acute: stored value=0.6 (= ingestor-normalised from raw tone=-0.2)
+        # blended = 0.4*0.5 + 0.2*0.7 + 0.4*0.6 = 0.20+0.14+0.24 = 0.58
+        _write(store, "world_bank", "IR", "trade_openness", 0.6,
+               metadata={"exports_pct_gdp": 50.0, "imports_pct_gdp": 70.0})
+        _write(store, "wits", "IR", "trade_concentration", 0.5,
+               metadata={"us_pct": 0.2, "eu_pct": 0.3, "world_total_usd": 1e11})
+        _write(store, "wits", "IR", "secondary_exposure", 0.4,
+               metadata={"sanctioned_weighted_usd": 4e10, "world_total_usd": 1e11, "n_sanctioned_partners": 2})
+        _write(store, "ofac", "IR", "sdn_entity_count", 0.7,
+               metadata={"raw_count": 1500, "rolling_max": 3200.0})
+        _write(store, "gdelt", "IR", "news_sentiment", 0.6)
+        dim = scorer.sanctions_risk("IR", _now())
+        assert abs(dim.score - 0.58) < 1e-4
 
     def test_weight(self, scorer):
         dim = scorer.sanctions_risk("XX", _now())
@@ -185,7 +240,8 @@ class TestEconomicStress:
 
     def test_finnhub_negative_news_raises_stress(self, scorer, store):
         # sentiment=-1.0 → stress = (1 - (-1)) / 2 = 1.0
-        _write(store, "finnhub", "general", "news_sentiment", -1.0)
+        # ingestor normalises: raw sentiment=-1.0 → stored value=(1-(-1.0))/2=1.0
+        _write(store, "finnhub", "general", "news_sentiment", 1.0)
         dim = scorer.economic_stress("US", _now())
         assert dim.score > 0.5
 
@@ -219,7 +275,8 @@ class TestCompositeWeights:
 
     def test_all_scores_in_range(self, scorer, store):
         _write(store, "world_bank", "IL", "political_stability", 0.4)
-        _write(store, "gdelt", "IL", "news_sentiment", -0.35)
+        # ingestor normalises: raw tone=-0.35 → stored value=(1-(-0.35))/2=0.675
+        _write(store, "gdelt", "IL", "news_sentiment", 0.675)
         _write(store, "unga_votes", "IL", "ideal_point_variance", 0.44)
         _write(store, "eia", "WTI", "crude_oil_price", 75.0)
         dims = scorer.score_all("IL", _now())

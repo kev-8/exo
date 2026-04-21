@@ -14,7 +14,7 @@ from exo.models import FeatureRecord, RawRecord
 logger = logging.getLogger(__name__)
 
 FINNHUB_BASE = "https://finnhub.io/api/v1"
-CATEGORIES = ["general", "forex", "crypto", "merger"]
+CATEGORIES = ["general", "forex", "merger"]
 
 _pipeline = None
 
@@ -103,18 +103,21 @@ class FinnhubIngestor(BaseIngestor):
     def normalise(self, raw: RawRecord) -> list[FeatureRecord]:
         now = raw.fetched_at
         sentiment = float(raw.raw.get("mean_sentiment", 0.0))
-        normalised = max(-1.0, min(1.0, sentiment))
+        clamped = max(-1.0, min(1.0, sentiment))
+        # Normalise to [0, 1]: negative sentiment (high stress) → score near 1.0
+        risk_score = (1.0 - clamped) / 2.0
 
         return [
             FeatureRecord(
                 source=self.source,
                 entity=raw.entity,
                 signal_type="news_sentiment",
-                value=normalised,
+                value=risk_score,
                 metadata={
                     "category": raw.raw.get("category"),
                     "n_articles": raw.raw.get("n_articles"),
                     "sample_headlines": raw.raw.get("headlines", []),
+                    "raw_sentiment": clamped,
                 },
                 as_of_ts=now,
             )

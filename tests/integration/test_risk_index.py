@@ -85,3 +85,83 @@ class TestRiskIndexIsolation:
         engine.update("UA", as_of_ts=t1)
         engine.update("UA", as_of_ts=t2)
         assert len(tmp_index.get_history("UA")) == 2
+
+
+class TestTierScores:
+    """Verify per-tier composite scores are computed and persisted."""
+
+    def _write(self, store, source, entity, signal_type, value, metadata=None):
+        store.write(FeatureRecord(
+            source=source, entity=entity,
+            signal_type=signal_type, value=value,
+            metadata=metadata or {},
+            as_of_ts=datetime.now(timezone.utc),
+        ))
+
+    def test_tier_scores_on_snapshot(self, tmp_store, tmp_index):
+        engine = RiskIndexEngine(store=tmp_store, index_store=tmp_index)
+        engine.update("US")
+        snap = tmp_index.get_latest("US")
+        assert hasattr(snap, "structural_score")
+        assert hasattr(snap, "short_term_score")
+        assert hasattr(snap, "acute_score")
+
+    def test_tier_scores_in_range(self, tmp_store, tmp_index):
+        engine = RiskIndexEngine(store=tmp_store, index_store=tmp_index)
+        engine.update("RU")
+        snap = tmp_index.get_latest("RU")
+        for attr in ("structural_score", "short_term_score", "acute_score"):
+            val = getattr(snap, attr)
+            assert 0.0 <= val <= 1.0, f"{attr}={val}"
+
+    def test_dimension_tier_scores_populated(self, tmp_store, tmp_index):
+        engine = RiskIndexEngine(store=tmp_store, index_store=tmp_index)
+        engine.update("CN")
+        snap = tmp_index.get_latest("CN")
+        for dim in snap.dimensions:
+            assert set(dim.tier_scores.keys()) == {"structural", "short_term", "acute"}
+
+    def test_structural_signal_shifts_structural_score(self, tmp_store, tmp_index):
+        # Write a high WGI political stability signal (well governed → low instability)
+        self._write(tmp_store, "world_bank", "IL", "political_stability", 0.9)
+        self._write(tmp_store, "world_bank", "IL", "voice_accountability", 0.9)
+        engine = RiskIndexEngine(store=tmp_store, index_store=tmp_index)
+        engine.update("IL")
+        snap = tmp_index.get_latest("IL")
+        # structural score should be pulled below average due to good governance
+        assert snap.structural_score < 0.5
+
+    def test_tier_scores_survive_index_store_roundtrip(self, tmp_store, tmp_index):
+        engine = RiskIndexEngine(store=tmp_store, index_store=tmp_index)
+        engine.update("PK")
+        snap = tmp_index.get_latest("PK")
+        for dim in snap.dimensions:
+            for tier, ts in dim.tier_scores.items():
+                assert ts.tier == tier
+                assert 0.0 <= ts.score <= 1.0
+
+    def test_tier_composite_helper(self):
+        from exo.models import DimensionScore, TierScore
+        dims = [
+            DimensionScore(
+                name="political_stability", score=0.2, weight=0.25,
+                contributing_signals=[],
+                tier_scores={
+                    "structural": TierScore("structural", 0.2, []),
+                    "short_term": TierScore("short_term", 0.5, []),
+                    "acute":      TierScore("acute", 0.5, []),
+                },
+            ),
+            DimensionScore(
+                name="economic_stress", score=0.8, weight=0.15,
+                contributing_signals=[],
+                tier_scores={
+                    "structural": TierScore("structural", 0.8, []),
+                    "short_term": TierScore("short_term", 0.5, []),
+                    "acute":      TierScore("acute", 0.5, []),
+                },
+            ),
+        ]
+        result = RiskIndexEngine._tier_composite(dims, "structural")
+        # weighted avg: (0.2*0.25 + 0.8*0.15) / (0.25+0.15) = (0.05+0.12)/0.4 = 0.425
+        assert abs(result - 0.425) < 1e-4
