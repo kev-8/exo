@@ -89,7 +89,10 @@ class IndexStore:
     ) -> list[RiskIndexSnapshot]:
         pattern = str(self.data_dir / f"country={country}" / "date=*" / "*.parquet")
         try:
-            df = self._db.execute(
+            # Use a fresh connection per query — DuckDB in-memory connections are
+            # NOT thread-safe when shared across concurrent requests.
+            _db = duckdb.connect(":memory:")
+            df = _db.execute(
                 f"SELECT * FROM read_parquet('{pattern}', union_by_name=true)"
             ).fetchdf()
         except Exception as exc:
@@ -127,6 +130,23 @@ class IndexStore:
                     contributing_signals=json.loads(d["signals"]),
                     tier_scores=tier_scores,
                 ))
+
+            # Derive tier scores from dimension tier_scores when the columns
+            # are absent (snapshots written before the schema added these fields).
+            def _tier_composite(tier: str) -> float:
+                total_w = sum(d.weight for d in dims if tier in d.tier_scores)
+                if total_w == 0:
+                    return 0.5
+                return sum(
+                    d.tier_scores[tier].score * d.weight
+                    for d in dims if tier in d.tier_scores
+                ) / total_w
+
+            cols = df.columns.tolist()
+            structural  = float(row["structural_score"])  if "structural_score"  in cols else _tier_composite("structural")
+            short_term  = float(row["short_term_score"])  if "short_term_score"  in cols else _tier_composite("short_term")
+            acute       = float(row["acute_score"])       if "acute_score"       in cols else _tier_composite("acute")
+
             as_of = row["as_of_ts"]
             if hasattr(as_of, "to_pydatetime"):
                 as_of = as_of.to_pydatetime()
@@ -135,9 +155,9 @@ class IndexStore:
                     snapshot_id=str(row["snapshot_id"]),
                     country=str(row["country"]),
                     composite_score=float(row["composite_score"]),
-                    structural_score=float(row.get("structural_score", 0.5)),
-                    short_term_score=float(row.get("short_term_score", 0.5)),
-                    acute_score=float(row.get("acute_score", 0.5)),
+                    structural_score=structural,
+                    short_term_score=short_term,
+                    acute_score=acute,
                     dimensions=dims,
                     as_of_ts=as_of,
                     computed_at=datetime.fromisoformat(str(row["computed_at"])),

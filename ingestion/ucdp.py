@@ -7,7 +7,9 @@ Two ingestors sharing this module:
   UCDPCandidateIngestor — Candidate dataset (current year, quarterly revisions).
                           Feeds the *short-term* tier of conflict_intensity.
 
-API: https://ucdpapi.pcr.uu.se/api/  (no key required)
+API: https://ucdpapi.pcr.uu.se/api/
+Auth: x-ucdp-access-token header (set UCDP_API_TOKEN env var).
+      Requests fail silently with 401 when token is absent/invalid.
 
 Normalisation: log-scale against a rolling max observed across all countries
 and all time, read from the feature store at normalise() time.  This keeps
@@ -22,12 +24,22 @@ from datetime import datetime, timezone
 
 import httpx
 
+from exo import config
 from exo.ingestion.base import BaseIngestor
 from exo.models import FeatureQuery, FeatureRecord, RawRecord
 
 logger = logging.getLogger(__name__)
 
 UCDP_BASE = "https://ucdpapi.pcr.uu.se/api"
+
+
+def _auth_headers() -> dict[str, str]:
+    """Return auth header dict if token is configured, else empty dict."""
+    token = config.UCDP_API_TOKEN
+    if not token:
+        logger.warning("UCDP_API_TOKEN not set — requests will return 401")
+        return {}
+    return {"x-ucdp-access-token": token}
 
 # ISO 3166-1 alpha-2 → UCDP country_id mapping (GW codes used by UCDP)
 # Source: https://ucdp.uu.se/downloads/
@@ -88,7 +100,7 @@ class _UCDPBase(BaseIngestor):
                 resp.raise_for_status()
                 body = resp.json()
             except Exception as exc:
-                logger.debug("UCDP fetch failed country=%s page=%d: %s", iso2, page, exc)
+                logger.warning("UCDP fetch failed country=%s page=%d: %s", iso2, page, exc)
                 break
 
             result = body.get("Result", [])
@@ -119,7 +131,7 @@ class _UCDPBase(BaseIngestor):
         raws: list[RawRecord] = []
         now = self.utcnow()
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, headers=_auth_headers()) as client:
             for iso2, country_id in ISO2_TO_UCDP.items():
                 raw = await self._fetch_country(client, country_id, iso2, now)
                 if raw is not None:
@@ -184,7 +196,7 @@ class UCDPGEDIngestor(_UCDPBase):
     """
 
     source = "ucdp_ged"
-    _endpoint = "gedevents/24.1"   # latest stable GED release; update annually
+    _endpoint = "gedevents/25.1"   # latest stable GED release; update annually
     _events_signal = "ucdp_ged_events"
     _fatalities_signal = "ucdp_ged_fatalities"
 

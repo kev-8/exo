@@ -178,9 +178,9 @@ class DimensionScorer:
             a_signals.append(f"gdelt_magnitude={gdelt_rec.value:.3f}")
 
         tier_scores = {
-            "structural": _tier_score("structural", s_scores, s_signals, default=0.3),
-            "short_term": _tier_score("short_term", st_scores, st_signals, default=0.3),
-            "acute":      _tier_score("acute", a_scores, a_signals, default=0.3),
+            "structural": _tier_score("structural", s_scores, s_signals, default=0.5),
+            "short_term": _tier_score("short_term", st_scores, st_signals, default=0.5),
+            "acute":      _tier_score("acute", a_scores, a_signals, default=0.5),
         }
         score = _blend_tiers("conflict_intensity", tier_scores)
         all_signals = s_signals + st_signals + a_signals

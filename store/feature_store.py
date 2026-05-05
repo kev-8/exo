@@ -182,7 +182,10 @@ class FeatureStore:
     def _load_df(self, source: str | None = None) -> pd.DataFrame | None:
         pattern = self._glob_pattern(source)
         try:
-            result = self._db.execute(
+            # Use a fresh connection per query — DuckDB in-memory connections are
+            # NOT thread-safe when shared across concurrent FastAPI requests.
+            _db = duckdb.connect(":memory:")
+            result = _db.execute(
                 f"SELECT * FROM read_parquet('{pattern}', union_by_name=true)"
             ).fetchdf()
             return result if not result.empty else None

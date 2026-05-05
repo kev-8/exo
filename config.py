@@ -32,6 +32,8 @@ FINNHUB_API_KEY: str = os.getenv("FINNHUB_API_KEY", "")
 
 EIA_API_KEY: str = os.getenv("EIA_API_KEY", "")
 
+UCDP_API_TOKEN: str = os.getenv("UCDP_API_TOKEN", "")
+
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 # ---------------------------------------------------------------------------
@@ -67,11 +69,22 @@ DIMENSION_WEIGHTS: dict[str, float] = {
     "economic_stress": 0.15,
 }
 
+# Weights used specifically when computing the top-level acute_score composite.
+# Conflict intensity dominates acute since it most directly reflects
+# current-moment events; policy_predictability is slow-moving so weighted low.
+ACUTE_DIMENSION_WEIGHTS: dict[str, float] = {
+    "political_stability":   0.30,
+    "conflict_intensity":    0.35,
+    "policy_predictability": 0.05,
+    "sanctions_risk":        0.15,
+    "economic_stress":       0.15,
+}
+
 # Tier weights per dimension — controls how structural / short_term / acute
 # sub-scores blend into the dimension's final score.
 DIMENSION_TIER_WEIGHTS: dict[str, dict[str, float]] = {
     "political_stability":   {"structural": 1.0, "short_term": 0.0, "acute": 0.0},
-    "conflict_intensity":    {"structural": 0.3, "short_term": 0.4, "acute": 0.3},
+    "conflict_intensity":    {"structural": 0.2, "short_term": 0.3, "acute": 0.5},
     "policy_predictability": {"structural": 1.0, "short_term": 0.0, "acute": 0.0},
     "sanctions_risk":        {"structural": 0.4, "short_term": 0.2, "acute": 0.4},
     "economic_stress":       {"structural": 0.3, "short_term": 0.4, "acute": 0.3},

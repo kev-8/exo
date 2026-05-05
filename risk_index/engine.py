@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+from exo import config
 from exo.models import RiskIndexSnapshot
 from exo.risk_index.dimensions import DimensionScorer
 from exo.store.feature_store import FeatureStore
@@ -40,15 +41,18 @@ class RiskIndexEngine:
         self._scorer = DimensionScorer(store=self.store)
 
     @staticmethod
-    def _tier_composite(dimensions: list, tier: str) -> float:
+    def _tier_composite(dimensions: list, tier: str, weight_override: dict | None = None) -> float:
         """Weighted composite of one tier's scores across all dimensions."""
-        total_weight = sum(
-            d.weight for d in dimensions if tier in d.tier_scores
-        )
+        def w(d) -> float:
+            if weight_override:
+                return weight_override.get(d.name, d.weight)
+            return d.weight
+
+        total_weight = sum(w(d) for d in dimensions if tier in d.tier_scores)
         if total_weight == 0:
             return 0.5
         return round(
-            sum(d.tier_scores[tier].score * d.weight for d in dimensions if tier in d.tier_scores)
+            sum(d.tier_scores[tier].score * w(d) for d in dimensions if tier in d.tier_scores)
             / total_weight,
             4,
         )
@@ -63,7 +67,7 @@ class RiskIndexEngine:
 
         structural = self._tier_composite(dimensions, "structural")
         short_term = self._tier_composite(dimensions, "short_term")
-        acute = self._tier_composite(dimensions, "acute")
+        acute = self._tier_composite(dimensions, "acute", weight_override=config.ACUTE_DIMENSION_WEIGHTS)
 
         snapshot = RiskIndexSnapshot(
             country=country,
