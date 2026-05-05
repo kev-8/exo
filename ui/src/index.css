@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Chakra+Petch:wght@300;400;500;600&family=IBM+Plex+Mono:wght@300;400;500&display=swap');
+@import "tailwindcss";
+
+:root {
+  --cyan: #00E676;
+  --cyan-dim: rgba(0, 230, 118, 0.15);
+  --cyan-glow: rgba(0, 230, 118, 0.4);
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #111111;
+  --border: rgba(0, 230, 118, 0.12);
+  --text: #e2e8f0;
+  --text-dim: #64748b;
+  --red: #ff3b5c;
+  --amber: #f59e0b;
+  --green: #10b981;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.font-logo    { font-family: 'Orbitron', sans-serif; }
+.font-display { font-family: 'Chakra Petch', sans-serif; }
+.font-mono    { font-family: 'IBM Plex Mono', monospace; }
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.025) 2px, rgba(0,0,0,0.025) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.risk-low    { color: var(--green); }
+.risk-medium { color: var(--amber); }
+.risk-high   { color: var(--red); }
+.cyan-glow   { box-shadow: 0 0 20px var(--cyan-glow); }
+
+@keyframes ping-slow {
+  0%   { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+.ping-slow { animation: ping-slow 2s ease-out infinite; }
