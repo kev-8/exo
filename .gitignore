@@ -6,6 +6,7 @@
 !api/data/*.json
 *.csv
 __pycache__/
+/src/exo/data/
 /data/
 /archive/
 *.egg-info/
