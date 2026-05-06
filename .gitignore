@@ -1,5 +1,8 @@
 .DS_Store
 *.json
+!package.json
+!ui/package.json
+!ui/package-lock.json
 !api/data/*.json
 *.csv
 __pycache__/
