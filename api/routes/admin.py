@@ -51,9 +51,17 @@ async def seed_from_url(url: str):
 
 @router.delete("/admin/cleanup", include_in_schema=False)
 def cleanup_stale_data():
-    """Delete the stale data directory at /app/src/exo/data."""
+    """Delete stale data from /app/src/exo/data and clear contents of DATA_DIR."""
+    deleted = []
+
     stale = Path("/app/src/exo/data")
-    if not stale.exists():
-        return JSONResponse({"status": "nothing to delete", "path": str(stale)})
-    shutil.rmtree(stale)
-    return JSONResponse({"status": "deleted", "path": str(stale)})
+    if stale.exists():
+        shutil.rmtree(stale)
+        deleted.append(str(stale))
+
+    data_dir = config.DATA_DIR
+    for child in data_dir.iterdir():
+        shutil.rmtree(child) if child.is_dir() else child.unlink()
+        deleted.append(str(child))
+
+    return JSONResponse({"status": "cleared", "deleted": deleted})
