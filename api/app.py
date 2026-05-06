@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import admin, countries, risk, signals, trade
+from api.routes import countries, risk, signals, trade
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,6 @@ app.add_middleware(
 # API routes
 # ---------------------------------------------------------------------------
 
-app.include_router(admin.router,     prefix="/api")
 app.include_router(countries.router, prefix="/api")
 app.include_router(risk.router,      prefix="/api")
 app.include_router(trade.router,     prefix="/api")
