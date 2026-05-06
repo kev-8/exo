@@ -23,12 +23,12 @@ const SIGNAL_CONFIG = {
   trade_openness:       { label: 'Trade Openness',       fmt: v => v.toFixed(1) + '% of GDP' },
   current_account:      { label: 'Current Account',      fmt: v => (v >= 0 ? '+' : '') + v.toFixed(1) + '% of GDP' },
   // FRED
-  fed_funds_rate:       { label: 'Fed Funds Rate',       fmt: v => v.toFixed(2) + '%' },
-  us_cpi_yoy:           { label: 'US CPI (YoY)',         fmt: v => v.toFixed(1) + '%' },
-  us_unemployment:      { label: 'US Unemployment',      fmt: v => v.toFixed(1) + '%' },
-  us_10y_yield:         { label: 'US 10Y Yield',         fmt: v => v.toFixed(2) + '%' },
-  us_gdp_growth:        { label: 'US GDP Growth',        fmt: v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%' },
-  us_m2_growth:         { label: 'M2 Growth',            fmt: v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%' },
+  fred_unrate:          { label: 'Unemployment Rate',    fmt: v => v.toFixed(1) + '%' },
+  fred_cpiaucsl:        { label: 'CPI Inflation',        fmt: v => v.toFixed(1) },
+  fred_fedfunds:        { label: 'Fed Funds Rate',       fmt: v => v.toFixed(2) + '%' },
+  fred_t10y2y:          { label: 'Yield Curve Spread',   fmt: v => (v >= 0 ? '+' : '') + v.toFixed(2) + '%' },
+  fred_umcsent:         { label: 'Consumer Sentiment',   fmt: v => v.toFixed(1) },
+  economic_indicator:   { label: 'FRED Composite',       fmt: v => v.toFixed(2) + ' / 1.0' },
 }
 
 function formatValue(sig) {
@@ -62,7 +62,7 @@ function SourcePill({ source }) {
   return (
     <span
       className="font-mono text-[9px] tracking-wider px-1.5 py-0.5 rounded shrink-0"
-      style={{ background: s.color, border: `1px solid ${s.border}`, color: s.text }}
+      style={{ background: s.color, border: `1.5px solid ${s.border}`, color: s.text }}
     >
       {s.label}
     </span>
@@ -103,7 +103,7 @@ export default function SignalFeed({ signals, loading }) {
               transition={{ delay: i * 0.04 }}
               className="flex items-center gap-3"
             >
-              <SourcePill source={sig.source} />
+              { <SourcePill source={sig.source} /> }
               <span className="font-display text-sm text-slate-200 flex-1 truncate">
                 {labelFor(sig)}
               </span>

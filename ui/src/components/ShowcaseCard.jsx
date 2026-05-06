@@ -173,7 +173,7 @@ export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeD
                     </div>
 
                     {/* Tier mini-scores */}
-                    <div className="grid grid-cols-3 gap-2 mb-1">
+                    <div className="grid grid-cols-3 gap-2 mt-4 mb-1">
                       {[
                         { label: 'STRUCTURAL', score: risk.structural },
                         { label: 'SHORT-TERM', score: risk.shortTerm },
@@ -198,7 +198,7 @@ export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeD
                 {/* Trade card */}
                 {type === 'trade' && trade && (
                   <>
-                    <div className="font-display text-xs tracking-[0.2em] text-white mt-2 mb-4">
+                    <div className="font-display text-xs tracking-[0.2em] text-white mt-6 mb-4">
                       TOP TRADE PARTNERS
                     </div>
                     <div className="space-y-3">

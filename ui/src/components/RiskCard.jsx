@@ -33,8 +33,7 @@ export default function RiskCard({ snapshot, country, onClose }) {
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
         className="relative w-full rounded-lg overflow-hidden border-white"
         style={{
-          background: 'rgba(10,10,10,0.75)',
-          border: '1px solid #ffffff',
+          background: 'rgba(10,10,10,0.75)'
         }}
       >
         <div style={{ padding: '1.0rem' }}>

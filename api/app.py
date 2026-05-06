@@ -7,6 +7,8 @@ In production (Railway), also serves the Vite static build from ui/dist/.
 from __future__ import annotations
 
 import logging
+import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -17,25 +19,37 @@ from api.routes import countries, risk, signals, trade
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from exo.scheduler import ExoScheduler
+    scheduler = ExoScheduler()
+    await scheduler.start()
+    logger.info("exo scheduler started")
+    yield
+    await scheduler.stop()
+    logger.info("exo scheduler stopped")
+
+
 app = FastAPI(
     title="exo Geopolitical Intelligence API",
     version="0.1.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
+    lifespan=lifespan,
 )
 
 # ---------------------------------------------------------------------------
-# CORS — allow the Vite dev server during development
+# CORS — dev servers + production Railway domain via env var
 # ---------------------------------------------------------------------------
+
+_default_origins = "http://localhost:5173,http://localhost:4173,http://localhost:3000"
+_allowed_origins = os.getenv("ALLOWED_ORIGINS", _default_origins).split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",   # Vite dev server
-        "http://localhost:4173",   # Vite preview
-        "http://localhost:3000",
-    ],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["GET"],
     allow_headers=["*"],
@@ -63,10 +77,8 @@ def health():
 _UI_DIST = Path(__file__).parent.parent / "ui" / "dist"
 
 if _UI_DIST.exists():
-    # Serve static assets under /assets
     app.mount("/assets", StaticFiles(directory=str(_UI_DIST / "assets")), name="assets")
 
-    # Catch-all: serve index.html for all non-API routes (SPA routing)
     from fastapi.responses import FileResponse
 
     @app.get("/{full_path:path}", include_in_schema=False)

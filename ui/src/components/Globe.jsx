@@ -20,6 +20,34 @@ const WORLD_COORDS = {
   CI: [7.5, -5.5],    CM: [3.9, 11.5],    UG: [1.4, 32.3],    SD: [12.9, 30.2],
 }
 
+const CONE_HEIGHT    = 5.5
+const CONE_HALF_H    = CONE_HEIGHT / 2       // 2.75
+const GLOBE_RADIUS   = 100                   // globe.gl default radius
+// Arc ends at the cone TIP; cone tip stops just before the destination pin.
+const PIN_CLEARANCE  = 0.5                   // globe units between cone tip and pin
+const CONE_SETBACK   = CONE_HALF_H + PIN_CLEARANCE  // 3.25 — center pulled back from dest
+
+function slerp(lat1, lng1, lat2, lng2, t) {
+  const R = Math.PI / 180
+  const φ1 = lat1*R, λ1 = lng1*R, φ2 = lat2*R, λ2 = lng2*R
+  const x1 = Math.cos(φ1)*Math.cos(λ1), y1 = Math.sin(φ1), z1 = Math.cos(φ1)*Math.sin(λ1)
+  const x2 = Math.cos(φ2)*Math.cos(λ2), y2 = Math.sin(φ2), z2 = Math.cos(φ2)*Math.sin(λ2)
+  const dot = Math.max(-1, Math.min(1, x1*x2 + y1*y2 + z1*z2))
+  const θ = Math.acos(dot)
+  if (θ < 0.001) return [lat2, lng2]
+  const s = Math.sin(θ)
+  const a = Math.sin((1-t)*θ)/s, b = Math.sin(t*θ)/s
+  const x = a*x1+b*x2, y = a*y1+b*y2, z = a*z1+b*z2
+  return [Math.asin(y)/R, Math.atan2(z, x)/R]
+}
+
+function gcArcLength(lat1, lng1, lat2, lng2) {
+  const R = Math.PI / 180
+  const φ1 = lat1*R, φ2 = lat2*R, Δλ = (lng2-lng1)*R
+  const dot = Math.sin(φ1)*Math.sin(φ2) + Math.cos(φ1)*Math.cos(φ2)*Math.cos(Δλ)
+  return GLOBE_RADIUS * Math.acos(Math.max(-1, Math.min(1, dot)))
+}
+
 function getDestCoords(iso2, countries) {
   const tracked = countries?.find(c => c.iso2 === iso2)
   if (tracked) return [tracked.lat, tracked.lon]
@@ -82,13 +110,20 @@ const Globe = forwardRef(function Globe({
       .filter(Boolean)
       .slice(0, 3)
 
-    return partners.map(p => ({
-      startLat: origin.lat, startLng: origin.lon,
-      endLat:   p.destLat,  endLng:   p.destLng,
-      color:    ['rgba(0,230,118,0.08)', 'rgba(0,230,118,0.85)'],
-      stroke:   Math.max(0.5, (p.share_pct / 50) * 2),
-      label:    `${p.name} — ${p.goods.join(', ')} — $${p.trade_usd_b}B`,
-    }))
+    return partners.map(p => {
+      const arcLen = gcArcLength(origin.lat, origin.lon, p.destLat, p.destLng)
+      // Arc ends at the cone tip — PIN_CLEARANCE before destination
+      const t = Math.max(0.5, 1 - PIN_CLEARANCE / arcLen)
+      const [arcEndLat, arcEndLng] = slerp(origin.lat, origin.lon, p.destLat, p.destLng, t)
+      return {
+        startLat: origin.lat,  startLng: origin.lon,
+        endLat:   arcEndLat,   endLng:   arcEndLng,
+        destLat:  p.destLat,   destLng:  p.destLng,
+        color:    ['rgba(0,230,118,0.08)', 'rgba(0,230,118,0.85)'],
+        stroke:   Math.max(0.5, (p.share_pct / 50) * 2),
+        label:    `${p.name} — ${p.goods.join(', ')} — $${p.trade_usd_b}B`,
+      }
+    })
   }, [tradeData, countries])
 
   const buildPins = useCallback((highlightIso2) => {
@@ -147,28 +182,24 @@ const Globe = forwardRef(function Globe({
       .arcStartLat('startLat').arcStartLng('startLng')
       .arcEndLat('endLat').arcEndLng('endLng')
       .arcColor('color').arcStroke('stroke')
-      .arcDashLength(0.45).arcDashGap(0.15)
-      .arcDashAnimateTime(1600).arcAltitudeAutoScale(0.35)
-      // Arrowhead cones at arc endpoints
-      .customLayerData([])
-      .customThreeObject(() =>
-        new THREE.Mesh(new THREE.ConeGeometry(1.6, 5.5, 6), coneMat.clone())
-      )
-      .customThreeObjectUpdate((obj, d) => {
-        // Position slightly above the surface so cones clear country pins (PIN_ALTITUDE = 0.015)
-        const c1 = globe.getCoords(d.endLat, d.endLng, 0.03)
-        obj.position.set(c1.x, c1.y, c1.z)
-
-        // Orient cone along the arc's arrival tangent at the endpoint
-        // Tangent of arrival at P1 = normalize(dot(P0_hat, P1_hat)*P1_hat - P0_hat)
-        const c0  = globe.getCoords(d.startLat, d.startLng, 0)
-        const v0  = new THREE.Vector3(c0.x, c0.y, c0.z).normalize()
-        const v1  = new THREE.Vector3(c1.x, c1.y, c1.z).normalize()
-        const tan = v1.clone().multiplyScalar(v0.dot(v1)).sub(v0).normalize()
-
-        // ConeGeometry tip is along +Y; rotate so +Y aligns with arrival tangent
-        obj.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tan)
-      })
+      .arcDashLength(1).arcDashGap(0)
+      .arcDashAnimateTime(1e9).arcAltitudeAutoScale(0.35)
+      // Arrowhead cones — commented out
+      // .customLayerData([])
+      // .customThreeObject(() =>
+      //   new THREE.Mesh(new THREE.ConeGeometry(1.6, 5.5, 6), coneMat.clone())
+      // )
+      // .customThreeObjectUpdate((obj, d) => {
+      //   const cDest = globe.getCoords(d.destLat, d.destLng, 0.03)
+      //   const c0    = globe.getCoords(d.startLat, d.startLng, 0)
+      //   const v0    = new THREE.Vector3(c0.x,    c0.y,    c0.z).normalize()
+      //   const v1    = new THREE.Vector3(cDest.x, cDest.y, cDest.z).normalize()
+      //   const tan   = v1.clone().multiplyScalar(v0.dot(v1)).sub(v0).normalize()
+      //   const pos   = new THREE.Vector3(cDest.x, cDest.y, cDest.z)
+      //   pos.addScaledVector(tan, -CONE_SETBACK)
+      //   obj.position.copy(pos)
+      //   obj.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tan)
+      // })
       // Labels
       .labelsData([])
       .labelLat('lat').labelLng('lng').labelText('name')
@@ -234,12 +265,12 @@ const Globe = forwardRef(function Globe({
         if (next && entry?.type === 'trade') {
           const arcs = buildArcs(next)
           globe.arcsData(arcs)
-          globe.customLayerData(arcs)
+          // globe.customLayerData(arcs)
           const label = countries?.find(c => c.iso2 === next)
           globe.labelsData(label ? [label] : [])
         } else {
           globe.arcsData([])
-          globe.customLayerData([])
+          // globe.customLayerData([])
           const label = next ? countries?.find(c => c.iso2 === next) : null
           globe.labelsData(label ? [label] : [])
         }
@@ -261,7 +292,7 @@ const Globe = forwardRef(function Globe({
       const arcs = buildArcs(selectedIso2)
       refreshPins(selectedIso2)
       globe.arcsData(arcs)
-      globe.customLayerData(arcs)
+      // globe.customLayerData(arcs)
       globe.labelsData([c])
     }, 1300)
   }, [selectedIso2, countries, buildPins, buildArcs])

@@ -41,7 +41,7 @@ export default function CountrySelector({ countries, selected, onSelect, onOpenC
           padding: '1rem 1.25rem',
           fontSize: '1rem',
           background: 'rgba(255,255,255,0.03)',
-          border: '1.5px solid #ffffff',
+          border: '2.5px solid #ffffff',
           color: selectedCountry ? 'white' : 'rgba(255,255,255,0.3)',
         }}
       >

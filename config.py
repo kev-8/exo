@@ -10,7 +10,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 ROOT_DIR = Path(__file__).parent
-DATA_DIR = ROOT_DIR / "data"
+DATA_DIR = Path(os.getenv("DATA_DIR", str(ROOT_DIR / "data")))
 FEATURES_DIR = DATA_DIR / "features"
 RISK_INDEX_DIR = DATA_DIR / "risk_index"
 

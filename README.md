@@ -10,7 +10,7 @@ exo ingests news events, conflict data, economic indicators, social sentiment, a
 
 Each dimension is decomposed into three tiers — **Structural** (annual baselines), **Short-term** (1–2 year trends), and **Acute** (7–30 day signals) — which blend into the dimension score using configurable per-dimension weights. The composite and all three tier-level aggregates are persisted with every snapshot.
 
-The risk index is updated every 6 hours and validated against established benchmarks (ICRG, V-Dem).
+The risk index is updated every 6 hours across **20 tracked countries**. A React frontend serves a live 3D globe with per-country risk cards, trade flow arcs, and a real-time signal feed.
 
 ---
 
@@ -20,17 +20,19 @@ The risk index is updated every 6 hours and validated against established benchm
 |---|---|---|
 | GDELT | 15 min | News sentiment by country |
 | Kalshi | 15 min + WebSocket | Market prices and volume |
-| Finnhub | 30 min | Financial news sentiment (FinBERT, general/forex/merger) |
+| Finnhub | 30 min | Financial news sentiment (VADER, general/forex/merger) |
 | Polymarket | 1 hour | Active market prices filtered by geopolitical tags |
 | Google Trends | 2 hours | Search volume for geopolitical keywords |
-| FRED | 12 hours | US macro indicators (unemployment, CPI, yield curve) |
-| World Bank | Daily | GDP growth, debt, unemployment, WGI governance indicators, energy imports, trade openness |
+| FRED | 12 hours | US macro indicators (unemployment, CPI, yield curve, consumer sentiment) |
+| World Bank | Daily | GDP growth, debt, unemployment, energy imports, trade openness, gross savings, current account |
 | EIA | Daily | Crude oil (WTI) and natural gas (Henry Hub) prices |
 | UNGA Votes | Weekly | Ideal point estimates (Harvard Dataverse) — policy predictability proxy |
 | OFAC | Weekly | SDN entity count per country, normalised via rolling max |
 | WITS | Weekly | Bilateral trade concentration (US/EU dependency) and secondary sanctions exposure |
-| UCDP GED | Weekly | Georeferenced historical conflict events and fatalities |
-| UCDP Candidate | Weekly | Candidate (near real-time) conflict events for short-term conflict tracking |
+| UCDP GED | Weekly | Georeferenced historical conflict events and fatalities (from 2010) |
+| UCDP Candidate | Weekly | Near real-time conflict events for short-term conflict tracking |
+
+> **Note:** World Bank WGI governance indicators (`PV.EST`, `VA.EST`, `RL.EST`, `CC.EST`) were removed from the WB v2 API in May 2026. WGI data is now seeded manually from the 2022 WGI report rather than fetched at runtime.
 
 ---
 
@@ -44,7 +46,7 @@ Five dimensions, each scored 0–1 (higher = higher risk). Each dimension expose
 | Conflict intensity | 25% | UCDP GED (historical fatalities) | UCDP Candidate (recent events) | GDELT event magnitude |
 | Policy predictability | 20% | UNGA ideal point variance (10-year window) | — | — |
 | Sanctions risk | 15% | Trade openness (World Bank), trade concentration (WITS), secondary exposure (WITS × OFAC) | OFAC SDN entity count | GDELT news sentiment, Google Trends sanctions search volume |
-| Economic stress | 15% | World Bank macro + WGI governance | FRED composite, EIA energy prices weighted by import dependency | Finnhub news sentiment (FinBERT) |
+| Economic stress | 15% | World Bank macro | FRED composite, EIA energy prices weighted by import dependency | Finnhub news sentiment (VADER) |
 
 The composite score is the weighted sum of dimension scores. Each of `structural_score`, `short_term_score`, and `acute_score` is also stored per snapshot as a weighted average of the corresponding tier across all dimensions.
 
@@ -56,7 +58,7 @@ The `secondary_exposure` signal quantifies how much of a country's trade flows t
 
 ### Signal normalisation
 
-All ingestors emit values in **[0, 1]** where 1.0 represents maximum risk. Sentiment signals (GDELT tone, Finnhub FinBERT) are transformed at ingest time: `risk_score = (1.0 − raw_sentiment) / 2`. Raw values are preserved in record metadata.
+All ingestors emit values in **[0, 1]** where 1.0 represents maximum risk. Sentiment signals (GDELT tone, Finnhub VADER) are transformed at ingest time: `risk_score = (1.0 − raw_sentiment) / 2`. Raw values are preserved in record metadata.
 
 ---
 
@@ -65,6 +67,7 @@ All ingestors emit values in **[0, 1]** where 1.0 represents maximum risk. Senti
 ### Prerequisites
 
 - Python 3.11+
+- Node.js 20+ (frontend build)
 - Redis (hot cache for latest feature records)
 
 ### Install
@@ -73,21 +76,28 @@ All ingestors emit values in **[0, 1]** where 1.0 represents maximum risk. Senti
 pip install -e ".[dev]"
 ```
 
+### Build the frontend
+
+```bash
+cd ui && npm install && npm run build
+```
+
 ### Environment variables
 
 ```bash
 # Required for live data
 KALSHI_API_KEY_ID=...
-KALSHI_PRIVATE_KEY=...      
+KALSHI_PRIVATE_KEY=...       # PEM content
 FRED_API_KEY=...
 FINNHUB_API_KEY=...
-REDDIT_CLIENT_ID=...
-REDDIT_CLIENT_SECRET=...
 EIA_API_KEY=...
+UCDP_API_TOKEN=...           # Request from mertcan.yilmaz@pcr.uu.se
 
 # Optional overrides
 REDIS_URL=redis://localhost:6379/0
-SDN_BILATERAL_THRESHOLD=0.05   # min normalised SDN score to include a country as a sanctions partner
+DATA_DIR=/data               # Path to persistent data directory (default: ./data)
+ALLOWED_ORIGINS=https://your-app.railway.app  # Comma-separated; default allows localhost dev servers
+SDN_BILATERAL_THRESHOLD=0.05
 ```
 
 GDELT, OFAC SDN, UCDP, UNGA, WITS, and World Bank do not require API keys.
@@ -96,23 +106,20 @@ GDELT, OFAC SDN, UCDP, UNGA, WITS, and World Bank do not require API keys.
 
 ## Running
 
-### Full pipeline
+### Full pipeline + API server
 
-```python
-# main.py
-import asyncio
-from exo.scheduler import ExoScheduler
+```bash
+# Start the API (serves frontend + runs the scheduler via lifespan)
+uvicorn api.app:app --host 0.0.0.0 --port 8000
 
-async def main():
-    scheduler = ExoScheduler()
-    await scheduler.start()
-    try:
-        while True:
-            await asyncio.sleep(60)
-    except KeyboardInterrupt:
-        await scheduler.stop()
+# Or run the pipeline without the API
+python main.py
+```
 
-asyncio.run(main())
+### Development (frontend hot-reload + API)
+
+```bash
+cd ui && npm run dev
 ```
 
 ### Single ingestor
@@ -166,36 +173,78 @@ Covers: schema validation, feature store round-trip, point-in-time query enforce
 
 ---
 
+## Deployment (Railway)
+
+The app is configured for single-service deployment on Railway: one process runs both the FastAPI server and the APScheduler pipeline via a FastAPI lifespan handler.
+
+**Services required:**
+- Web service (Python 3.11 + Node 20) — builds frontend, serves API + static files
+- Redis add-on — injected as `REDIS_URL` automatically
+- Volume — mount at `/data`, set `DATA_DIR=/data`
+
+Build and start are configured in `nixpacks.toml` and `railway.toml`. Set all env vars listed above in the Railway dashboard before first deploy.
+
+**Data seeding on first deploy:**
+
+```bash
+# Export essential local data (excludes Kalshi/Polymarket bulk stores)
+./scripts/export_data.sh
+
+# Transfer to Railway volume via shell (see script output for transfer options)
+railway shell
+```
+
+---
+
 ## Project structure
 
 ```
 exo/
-├── config.py              # Env vars, staleness thresholds, dimension tier weights
+├── config.py              # Env vars, paths, staleness thresholds, dimension weights
 ├── models.py              # Shared dataclasses (TierScore, DimensionScore, RiskIndexSnapshot)
 ├── event_bus.py           # Async pub/sub
 ├── scheduler.py           # APScheduler — all ingestion and index jobs
+├── main.py                # Pipeline-only entry point (no API)
 ├── observability.py       # Structured logging and metrics
 │
-├── ingestion/             # 12 data source ingestors:
+├── ingestion/             # 13 active ingestors across 12 files:
 │   ├── gdelt.py           #   GDELT news sentiment (15 min)
 │   ├── kalshi.py          #   Kalshi prediction markets (15 min + WS)
-│   ├── finnhub.py         #   Finnhub financial news via FinBERT (30 min)
+│   ├── finnhub.py         #   Finnhub financial news via VADER (30 min)
 │   ├── polymarket.py      #   Polymarket prediction markets (1 hr)
 │   ├── google_trends.py   #   Google Trends search volume (2 hr)
 │   ├── fred.py            #   FRED macro indicators (12 hr)
-│   ├── world_bank.py      #   World Bank WGI + macro + trade openness (daily)
+│   ├── world_bank.py      #   World Bank macro + trade openness (daily)
 │   ├── eia.py             #   EIA crude oil and gas prices (daily)
 │   ├── unga_votes.py      #   UNGA ideal point estimates (weekly)
 │   ├── ofac.py            #   OFAC SDN list entity counts (weekly)
 │   ├── wits.py            #   WITS bilateral trade + secondary exposure (weekly)
-│   ├── ucdp.py            #   UCDP GED + Candidate conflict data (weekly)
+│   └── ucdp.py            #   UCDP GED + Candidate conflict data (weekly)
 │
 ├── store/
 │   ├── feature_store.py   # DuckDB + Parquet + Redis hot cache
 │   └── index_store.py     # Risk index snapshot persistence (with tier scores)
 │
-└── risk_index/
-    ├── dimensions.py      # Five-dimension scorer with structural/short-term/acute tiers
-    ├── engine.py          # RiskIndexEngine — composite + per-tier aggregation
-    └── validation.py      # ICRG / V-Dem correlation checks
+├── risk_index/
+│   ├── dimensions.py      # Five-dimension scorer with structural/short-term/acute tiers
+│   ├── engine.py          # RiskIndexEngine — composite + per-tier aggregation
+│   └── validation.py      # ICRG / V-Dem correlation checks
+│
+├── api/
+│   ├── app.py             # FastAPI app with lifespan scheduler + static file serving
+│   └── routes/            # /api/countries, /api/risk, /api/trade, /api/signals
+│
+├── ui/                    # React + Vite + Tailwind frontend
+│   └── src/
+│       ├── App.jsx
+│       ├── components/    # Globe, RiskCard, TradePanel, SignalFeed, ShowcaseCard, CountrySelector
+│       ├── data/          # Static fallback data (showcaseData.js)
+│       └── lib/           # api.js, riskColor.js
+│
+├── scripts/
+│   ├── export_data.sh     # Export essential data for Railway volume seeding
+│   └── seed_ucdp_bulk.py  # Seed UCDP GED/Candidate from public bulk downloads
+│
+├── nixpacks.toml          # Railway build config (Node 20 + Python 3.11)
+└── railway.toml           # Railway deploy config (health check)
 ```

@@ -126,7 +126,7 @@ export default function App() {
           </h1>
           <p
             className="font-display tracking-[0.3em] uppercase mt-2"
-            style={{ fontSize: '0.72rem', color: 'rgba(0,230,118,0.55)', letterSpacing: '0.28em' }}
+            style={{ fontSize: '0.72rem', color: '#00E676', letterSpacing: '0.28em'}}
           >
             Geopolitical Intelligence
           </p>
@@ -198,7 +198,7 @@ export default function App() {
                   <div style={{
                     background: 'rgba(10,10,10,0.75)',
                     borderRadius: '0.75rem',
-                    border: '1px solid #ffffff',
+                    border: '2.5px solid #ffffff',
                     overflow: 'hidden',
                   }}>
                     <RiskCard snapshot={snapshot} country={selectedCountry} />
@@ -211,7 +211,7 @@ export default function App() {
                 className="rounded-xl border-white"
                 style={{
                   background: 'rgba(10,10,10,0.75)',
-                  border: '1px solid #ffffff',
+                  border: '2.5px solid #ffffff',
                   padding: '1.0rem',
                 }}
               >
@@ -223,7 +223,7 @@ export default function App() {
                 className="rounded-xl border-white"
                 style={{
                   background: 'rgba(10,10,10,0.75)',
-                  border: '1px solid #ffffff',
+                  border: '2.5px solid #ffffff',
                   padding: '1.0rem',
                 }}
               >

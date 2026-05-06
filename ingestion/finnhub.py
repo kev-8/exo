@@ -1,4 +1,4 @@
-"""Finnhub ingestor — news sentiment via FinBERT, every 30 minutes."""
+"""Finnhub ingestor — news sentiment via VADER, every 30 minutes."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timezone
 
 import httpx
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 from exo import config
 from exo.ingestion.base import BaseIngestor
@@ -16,39 +17,19 @@ logger = logging.getLogger(__name__)
 FINNHUB_BASE = "https://finnhub.io/api/v1"
 CATEGORIES = ["general", "forex", "merger"]
 
-_pipeline = None
-
-
-def _get_pipeline():
-    """Lazy-load FinBERT pipeline (downloads model on first call)."""
-    global _pipeline
-    if _pipeline is None:
-        from transformers import pipeline
-        logger.info("Loading FinBERT sentiment model...")
-        _pipeline = pipeline(
-            "sentiment-analysis",
-            model="ProsusAI/finbert",
-            tokenizer="ProsusAI/finbert",
-            truncation=True,
-            max_length=512,
-        )
-        logger.info("FinBERT model loaded")
-    return _pipeline
+_analyzer = SentimentIntensityAnalyzer()
 
 
 def _score_texts(texts: list[str]) -> float:
-    """Run FinBERT on a list of texts, return mean sentiment in [-1, 1]."""
+    """Return mean compound VADER sentiment in [-1, 1]."""
     if not texts:
         return 0.0
-    pipe = _get_pipeline()
-    results = pipe(texts, batch_size=16)
-    label_map = {"positive": 1.0, "negative": -1.0, "neutral": 0.0}
-    scores = [label_map.get(r["label"].lower(), 0.0) * r["score"] for r in results]
+    scores = [_analyzer.polarity_scores(t)["compound"] for t in texts]
     return sum(scores) / len(scores)
 
 
 class FinnhubIngestor(BaseIngestor):
-    """Ingest Finnhub news and score sentiment locally with FinBERT."""
+    """Ingest Finnhub news and score sentiment with VADER."""
 
     source = "finnhub"
 

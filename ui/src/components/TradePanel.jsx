@@ -50,7 +50,7 @@ export default function TradePanel({ tradeData, loading }) {
                 <span
                   key={g}
                   className="font-mono text-[10px] px-2 py-0.5 rounded"
-                  style={{ background: 'rgba(0,230,118,0.06)', color: 'rgba(0,230,118,0.5)', border: '1px solid rgba(0,230,118,0.1)' }}
+                  style={{ background: 'rgba(0,230,118,0.06)', color: 'rgba(0,230,118,0.5)', border: '1.5px solid rgba(0,230,118,0.1)' }}
                 >
                   {g}
                 </span>
