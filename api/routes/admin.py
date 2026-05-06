@@ -5,7 +5,7 @@ DELETE THIS FILE after the initial data transfer is complete.
 
 from __future__ import annotations
 
-import subprocess
+import shutil
 import tarfile
 import tempfile
 from pathlib import Path
@@ -47,3 +47,13 @@ async def seed_from_url(url: str):
     except Exception as exc:
         tmp_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.delete("/admin/cleanup", include_in_schema=False)
+def cleanup_stale_data():
+    """Delete the stale data directory at /app/src/exo/data."""
+    stale = Path("/app/src/exo/data")
+    if not stale.exists():
+        return JSONResponse({"status": "nothing to delete", "path": str(stale)})
+    shutil.rmtree(stale)
+    return JSONResponse({"status": "deleted", "path": str(stale)})
