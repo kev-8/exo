@@ -1,5 +1,5 @@
 [build]
-buildCommand = "pip install -r requirements.txt && pip install -e . && npm install --prefix ui && npm run build --prefix ui"  
+buildCommand = "pip install -r requirements.txt && pip install -e . && npm install --prefix ui && npm run build --prefix ui"
 
 [deploy]
 startCommand = "uvicorn api.app:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"
@@ -7,6 +7,3 @@ healthcheckPath = "/api/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
-
-[deploy.variables]
-RAILPACK_PACKAGES = "node"
