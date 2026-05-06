@@ -31,10 +31,10 @@ export default function RiskCard({ snapshot, country, onClose }) {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 40 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="relative w-full rounded-lg overflow-hidden"
+        className="relative w-full rounded-lg overflow-hidden border-white"
         style={{
           background: 'rgba(10,10,10,0.75)',
-          border: '1px solid white',
+          border: '1px solid #ffffff',
         }}
       >
         <div style={{ padding: '1.0rem' }}>
@@ -69,7 +69,7 @@ export default function RiskCard({ snapshot, country, onClose }) {
               </div>
 
               {/* Three-tier scores */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-3 mt-6">
                 {[
                   { label: 'STRUCTURAL', score: structural_score },
                   { label: 'SHORT-TERM', score: short_term_score },
@@ -81,7 +81,7 @@ export default function RiskCard({ snapshot, country, onClose }) {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 + i * 0.07 }}
                     className="rounded p-4 text-center"
-                    style={{ background: 'rgba(10,10,10,0.75)', border: '1px solid rgba(255,255,255,0.05)' }}
+                    style={{}}
                   >
                     <div className="font-display text-[10px] tracking-[0.2em] text-slate-200 mb-1.5">{label}</div>
                     <div className="font-mono text-xl font-medium" style={{ color: riskColor(score) }}>
@@ -92,7 +92,7 @@ export default function RiskCard({ snapshot, country, onClose }) {
               </div>
 
               {/* Timestamp */}
-              <div className="mt-auto pt-6 font-mono text-xs text-slate-200">
+              <div className="mt-auto pt-10 font-mono text-[10px] text-slate-500">
                 as of {new Date(snapshot.as_of_ts).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
               </div>
             </div>

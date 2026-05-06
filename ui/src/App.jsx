@@ -182,10 +182,10 @@ export default function App() {
               <div style={{ gridColumn: '1 / -1' }}>
                 {riskLoading || !snapshot ? (
                   <div
-                    className="rounded-xl p-6"
+                    className="rounded-xl p-6 border-white"
                     style={{
                       background: 'rgba(10,10,10,0.75)',
-                                            border: '1px solid white',
+                      border: '1px solid #ffffff',
                     }}
                   >
                     <div className="space-y-3">
@@ -197,8 +197,8 @@ export default function App() {
                 ) : (
                   <div style={{
                     background: 'rgba(10,10,10,0.75)',
-                                        borderRadius: '0.75rem',
-                    border: '1px solid white',
+                    borderRadius: '0.75rem',
+                    border: '1px solid #ffffff',
                     overflow: 'hidden',
                   }}>
                     <RiskCard snapshot={snapshot} country={selectedCountry} />
@@ -208,10 +208,10 @@ export default function App() {
 
               {/* Trade panel — left half */}
               <div
-                className="rounded-xl"
+                className="rounded-xl border-white"
                 style={{
                   background: 'rgba(10,10,10,0.75)',
-                                    border: '1px solid white',
+                  border: '1px solid #ffffff',
                   padding: '1.0rem',
                 }}
               >
@@ -220,10 +220,10 @@ export default function App() {
 
               {/* Signal feed — right half */}
               <div
-                className="rounded-xl"
+                className="rounded-xl border-white"
                 style={{
                   background: 'rgba(10,10,10,0.75)',
-                                    border: '1px solid white',
+                  border: '1px solid #ffffff',
                   padding: '1.0rem',
                 }}
               >

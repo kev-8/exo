@@ -127,10 +127,10 @@ export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeD
             style={wrapStyle}
           >
             <div
-              className="rounded-lg overflow-hidden"
+              className="rounded-lg overflow-hidden border-white"
               style={{
                 background: 'rgba(255,255,255,0.03)',
-                border: '1.5px solid white',
+                border: '2.5px solid #ffffff',
               }}
             >
               <div style={{ padding: '1.0rem' }}>
@@ -143,7 +143,7 @@ export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeD
                       style={{ width: 32, height: 'auto', borderRadius: 3, display: 'block', flexShrink: 0 }}
                     />
                     <div>
-                      <div className="font-display text-[10px] tracking-[0.2em] text-slate-300 mb-1 uppercase">
+                      <div className="font-display text-[10px] tracking-[0.2em] text-white mb-1 uppercase">
                         {country.region}
                       </div>
                       <div className="font-display text-lg font-semibold text-white leading-tight">
@@ -168,7 +168,7 @@ export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeD
                 {/* Risk card */}
                 {type === 'risk' && risk && (
                   <>
-                    <div className="font-display text-xs tracking-[0.2em] text-slate-300 mt-2 mb-4">
+                    <div className="font-display text-xs tracking-[0.2em] text-white mt-6 mb-4">
                       RISK SCORE
                     </div>
 
@@ -182,9 +182,9 @@ export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeD
                         <div
                           key={label}
                           className="rounded p-2 text-center"
-                          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
+                          style={{}}
                         >
-                          <div className="font-display text-[9px] tracking-wider text-slate-300 mb-0.5">{label}</div>
+                          <div className="font-display text-[9px] tracking-wider text-white mb-0.5">{label}</div>
                           <div className="font-mono text-sm" style={{ color: riskColor(score) }}>
                             {score.toFixed(2)}
                           </div>
@@ -198,7 +198,7 @@ export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeD
                 {/* Trade card */}
                 {type === 'trade' && trade && (
                   <>
-                    <div className="font-display text-xs tracking-[0.2em] text-slate-300 mt-2 mb-4">
+                    <div className="font-display text-xs tracking-[0.2em] text-white mt-2 mb-4">
                       TOP TRADE PARTNERS
                     </div>
                     <div className="space-y-3">
@@ -212,7 +212,7 @@ export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeD
                         >
                           <span className="font-mono text-sm text-white truncate flex-1">{p.name}</span>
                           <div className="flex items-center gap-2 shrink-0">
-                            <span className="font-mono text-xs text-slate-300">{p.share}%</span>
+                            <span className="font-mono text-xs text-white">{p.share}%</span>
                             <div className="w-14 h-[3px] rounded-full overflow-hidden bg-white/5">
                               <motion.div
                                 className="h-full rounded-full"

@@ -36,12 +36,12 @@ export default function CountrySelector({ countries, selected, onSelect, onOpenC
     <div ref={ref} className="relative w-full">
       <button
         onClick={() => setOpenWithCallback(o => !o)}
-        className="w-full flex items-center justify-between rounded font-display tracking-wide transition-all duration-200"
+        className="w-full flex items-center justify-between rounded font-display tracking-wide transition-all duration-200 border-white"
         style={{
           padding: '1rem 1.25rem',
           fontSize: '1rem',
-          background: open ? 'rgba(0,230,118,0.08)' : 'rgba(255,255,255,0.03)',
-          border: `1.5px solid ${open ? 'rgba(0,230,118,0.3)' : 'white'}`,
+          background: 'rgba(255,255,255,0.03)',
+          border: '1.5px solid #ffffff',
           color: selectedCountry ? 'white' : 'rgba(255,255,255,0.3)',
         }}
       >
@@ -71,10 +71,10 @@ export default function CountrySelector({ countries, selected, onSelect, onOpenC
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.15 }}
-            className="absolute bottom-full left-0 right-0 mb-1 rounded z-50"
+            className="absolute bottom-full left-0 right-0 mb-1 rounded z-50 border-white"
             style={{
               background: 'rgba(255,255,255,0.03)',
-              border: '1.5px solid white',
+              border: '1.5px solid #ffffff',
               boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
               padding: '0.25rem',
             }}

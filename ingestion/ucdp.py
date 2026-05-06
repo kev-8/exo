@@ -61,6 +61,8 @@ def _log_normalise(value: float, rolling_max: float, fallback: float) -> float:
     return min(1.0, math.log1p(max(0.0, value)) / denom)
 
 
+_GED_SINCE_YEAR = 2010  # structural tier uses recent conflict history only
+
 class _UCDPBase(BaseIngestor):
     """Shared fetch/normalise logic for GED and Candidate ingestors."""
 
@@ -68,6 +70,7 @@ class _UCDPBase(BaseIngestor):
     _endpoint: str             # overridden by subclass (e.g. "gedevents/23.1")
     _events_signal: str        # signal_type for event count
     _fatalities_signal: str    # signal_type for fatalities (GED only; "" = skip)
+    _year_filter: dict         # extra query params for year filtering (GED only)
 
     async def _fetch_country(
         self,
@@ -89,6 +92,7 @@ class _UCDPBase(BaseIngestor):
                         "country_id": country_id,
                         "pagesize": page_size,
                         "page": page,
+                        **self._year_filter,
                     },
                 )
                 resp.raise_for_status()
@@ -185,7 +189,7 @@ class _UCDPBase(BaseIngestor):
 class UCDPGEDIngestor(_UCDPBase):
     """UCDP Georeferenced Events Dataset — structural conflict signal.
 
-    Fetches the latest completed year of verified conflict events.
+    Fetches verified conflict events from GED_SINCE_YEAR onward.
     Cadence: weekly (annual data releases; weekly polling picks up new releases).
     """
 
@@ -193,6 +197,7 @@ class UCDPGEDIngestor(_UCDPBase):
     _endpoint = "gedevents/25.1"   # latest stable GED release; update annually
     _events_signal = "ucdp_ged_events"
     _fatalities_signal = "ucdp_ged_fatalities"
+    _year_filter = {"StartDate": f"{_GED_SINCE_YEAR}-01-01"}
 
 
 class UCDPCandidateIngestor(_UCDPBase):
@@ -206,3 +211,4 @@ class UCDPCandidateIngestor(_UCDPBase):
     _endpoint = "gedevents/candidates"
     _events_signal = "ucdp_candidate_events"
     _fatalities_signal = ""   # candidate dataset omits best-estimate fatalities
+    _year_filter = {}

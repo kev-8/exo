@@ -46,6 +46,8 @@ body::after {
   z-index: 9999;
 }
 
+.border-white { border-color: #ffffff !important; }
+
 .risk-low    { color: var(--green); }
 .risk-medium { color: var(--amber); }
 .risk-high   { color: var(--red); }
