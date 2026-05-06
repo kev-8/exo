@@ -1,0 +1,142 @@
+{
+  "US": [
+    {"iso2": "CA", "name": "Canada",  "trade_usd_b": 356, "share_pct": 17.3, "goods": ["Vehicles", "Machinery", "Oil & Gas"]},
+    {"iso2": "MX", "name": "Mexico",  "trade_usd_b": 323, "share_pct": 15.7, "goods": ["Vehicles", "Electronics", "Machinery"]},
+    {"iso2": "CN", "name": "China",   "trade_usd_b": 148, "share_pct":  7.2, "goods": ["Semiconductors", "Aircraft", "Soybeans"]},
+    {"iso2": "JP", "name": "Japan",   "trade_usd_b":  80, "share_pct":  3.9, "goods": ["Aircraft", "Machinery", "Medical Devices"]},
+    {"iso2": "GB", "name": "UK",      "trade_usd_b":  68, "share_pct":  3.3, "goods": ["Pharmaceuticals", "Aircraft", "Machinery"]}
+  ],
+  "RU": [
+    {"iso2": "CN", "name": "China",   "trade_usd_b": 114, "share_pct": 33.9, "goods": ["Oil & Gas", "Coal", "Timber"]},
+    {"iso2": "IN", "name": "India",   "trade_usd_b":  46, "share_pct": 13.7, "goods": ["Crude Oil", "Fertilizers", "Coal"]},
+    {"iso2": "TR", "name": "Turkey",  "trade_usd_b":  26, "share_pct":  7.8, "goods": ["Natural Gas", "Oil Products", "Grain"]},
+    {"iso2": "BY", "name": "Belarus", "trade_usd_b":  17, "share_pct":  5.1, "goods": ["Oil & Gas", "Machinery", "Chemicals"]},
+    {"iso2": "KZ", "name": "Kazakhstan", "trade_usd_b": 14, "share_pct": 4.2, "goods": ["Oil", "Metals", "Machinery"]}
+  ],
+  "CN": [
+    {"iso2": "US", "name": "United States", "trade_usd_b": 500, "share_pct": 14.8, "goods": ["Electronics", "Machinery", "Textiles"]},
+    {"iso2": "HK", "name": "Hong Kong",     "trade_usd_b": 298, "share_pct":  8.8, "goods": ["Electronics", "Machinery", "Apparel"]},
+    {"iso2": "JP", "name": "Japan",         "trade_usd_b": 177, "share_pct":  5.2, "goods": ["Electronics", "Machinery", "Chemicals"]},
+    {"iso2": "KR", "name": "South Korea",   "trade_usd_b": 162, "share_pct":  4.8, "goods": ["Electronics", "Semiconductors", "Steel"]},
+    {"iso2": "VN", "name": "Vietnam",       "trade_usd_b": 148, "share_pct":  4.4, "goods": ["Electronics", "Machinery", "Textiles"]}
+  ],
+  "UA": [
+    {"iso2": "PL", "name": "Poland",  "trade_usd_b": 9.4, "share_pct": 18.6, "goods": ["Grain", "Steel", "Machinery"]},
+    {"iso2": "CN", "name": "China",   "trade_usd_b": 7.1, "share_pct": 14.0, "goods": ["Sunflower Oil", "Iron Ore", "Grain"]},
+    {"iso2": "DE", "name": "Germany", "trade_usd_b": 4.9, "share_pct":  9.7, "goods": ["Steel", "Chemicals", "Machinery"]},
+    {"iso2": "TR", "name": "Turkey",  "trade_usd_b": 4.4, "share_pct":  8.7, "goods": ["Grain", "Steel", "Iron Ore"]},
+    {"iso2": "IN", "name": "India",   "trade_usd_b": 3.8, "share_pct":  7.5, "goods": ["Sunflower Oil", "Grain", "Iron Ore"]}
+  ],
+  "IL": [
+    {"iso2": "US", "name": "United States", "trade_usd_b": 18.6, "share_pct": 26.0, "goods": ["Diamonds", "Machinery", "Pharmaceuticals"]},
+    {"iso2": "CN", "name": "China",         "trade_usd_b":  8.3, "share_pct": 11.6, "goods": ["Diamonds", "Semiconductors", "Chemicals"]},
+    {"iso2": "GB", "name": "UK",            "trade_usd_b":  4.2, "share_pct":  5.9, "goods": ["Diamonds", "Pharmaceuticals", "Machinery"]},
+    {"iso2": "HK", "name": "Hong Kong",     "trade_usd_b":  3.8, "share_pct":  5.3, "goods": ["Diamonds", "Electronics", "Chemicals"]},
+    {"iso2": "DE", "name": "Germany",       "trade_usd_b":  3.4, "share_pct":  4.8, "goods": ["Machinery", "Chemicals", "Electronics"]}
+  ],
+  "IR": [
+    {"iso2": "CN", "name": "China",       "trade_usd_b": 29.0, "share_pct": 46.4, "goods": ["Crude Oil", "Petrochemicals", "Pistachios"]},
+    {"iso2": "IQ", "name": "Iraq",        "trade_usd_b": 10.5, "share_pct": 16.8, "goods": ["Natural Gas", "Food Products", "Manufactured Goods"]},
+    {"iso2": "TR", "name": "Turkey",      "trade_usd_b":  6.2, "share_pct":  9.9, "goods": ["Natural Gas", "Petrochemicals", "Metals"]},
+    {"iso2": "AF", "name": "Afghanistan", "trade_usd_b":  2.9, "share_pct":  4.6, "goods": ["Food", "Fuel", "Construction Materials"]},
+    {"iso2": "PK", "name": "Pakistan",    "trade_usd_b":  2.4, "share_pct":  3.8, "goods": ["Natural Gas", "Fuel Oil", "Chemicals"]}
+  ],
+  "IN": [
+    {"iso2": "US", "name": "United States", "trade_usd_b": 78.0, "share_pct": 17.7, "goods": ["Pharmaceuticals", "IT Services", "Textiles"]},
+    {"iso2": "AE", "name": "UAE",           "trade_usd_b": 31.3, "share_pct":  7.1, "goods": ["Petroleum Products", "Gems", "Machinery"]},
+    {"iso2": "CN", "name": "China",         "trade_usd_b": 16.4, "share_pct":  3.7, "goods": ["Organic Chemicals", "Electronics", "Machinery"]},
+    {"iso2": "NL", "name": "Netherlands",   "trade_usd_b": 13.0, "share_pct":  2.9, "goods": ["Petroleum Products", "Chemicals", "Machinery"]},
+    {"iso2": "BD", "name": "Bangladesh",    "trade_usd_b": 11.2, "share_pct":  2.5, "goods": ["Cotton", "Yarn", "Pharmaceuticals"]}
+  ],
+  "PK": [
+    {"iso2": "CN", "name": "China",         "trade_usd_b": 5.4, "share_pct": 22.5, "goods": ["Textiles", "Leather", "Rice"]},
+    {"iso2": "US", "name": "United States", "trade_usd_b": 5.3, "share_pct": 22.1, "goods": ["Textiles", "Apparel", "Surgical Instruments"]},
+    {"iso2": "AE", "name": "UAE",           "trade_usd_b": 2.7, "share_pct": 11.3, "goods": ["Textiles", "Rice", "Leather"]},
+    {"iso2": "GB", "name": "UK",            "trade_usd_b": 1.5, "share_pct":  6.3, "goods": ["Textiles", "Apparel", "Chemicals"]},
+    {"iso2": "DE", "name": "Germany",       "trade_usd_b": 1.1, "share_pct":  4.6, "goods": ["Textiles", "Leather", "Surgical Instruments"]}
+  ],
+  "KP": [
+    {"iso2": "CN", "name": "China",   "trade_usd_b": 0.63, "share_pct": 92.5, "goods": ["Minerals", "Metals", "Textiles"]},
+    {"iso2": "RU", "name": "Russia",  "trade_usd_b": 0.03, "share_pct":  4.4, "goods": ["Minerals", "Labor Services", "Arms"]},
+    {"iso2": "IN", "name": "India",   "trade_usd_b": 0.01, "share_pct":  1.5, "goods": ["Minerals", "Metals", "Chemicals"]},
+    {"iso2": "SY", "name": "Syria",   "trade_usd_b": 0.005,"share_pct":  0.7, "goods": ["Arms", "Military Equipment", "Metals"]},
+    {"iso2": "IR", "name": "Iran",    "trade_usd_b": 0.005,"share_pct":  0.7, "goods": ["Arms", "Military Equipment", "Metals"]}
+  ],
+  "TW": [
+    {"iso2": "CN", "name": "China",         "trade_usd_b": 189.0, "share_pct": 35.2, "goods": ["Semiconductors", "Electronics", "Machinery"]},
+    {"iso2": "US", "name": "United States", "trade_usd_b":  80.2, "share_pct": 14.9, "goods": ["Semiconductors", "Electronics", "Machinery"]},
+    {"iso2": "HK", "name": "Hong Kong",     "trade_usd_b":  44.0, "share_pct":  8.2, "goods": ["Electronics", "Semiconductors", "Plastics"]},
+    {"iso2": "JP", "name": "Japan",         "trade_usd_b":  42.5, "share_pct":  7.9, "goods": ["Semiconductors", "Petrochemicals", "Machinery"]},
+    {"iso2": "KR", "name": "South Korea",   "trade_usd_b":  30.0, "share_pct":  5.6, "goods": ["Semiconductors", "Plastics", "Electronics"]}
+  ],
+  "BR": [
+    {"iso2": "CN", "name": "China",         "trade_usd_b": 98.4, "share_pct": 26.8, "goods": ["Soybeans", "Iron Ore", "Crude Oil"]},
+    {"iso2": "US", "name": "United States", "trade_usd_b": 67.2, "share_pct": 18.3, "goods": ["Aircraft", "Oil & Gas", "Machinery"]},
+    {"iso2": "AR", "name": "Argentina",     "trade_usd_b": 22.1, "share_pct":  6.0, "goods": ["Vehicles", "Soybeans", "Natural Gas"]},
+    {"iso2": "NL", "name": "Netherlands",   "trade_usd_b": 19.4, "share_pct":  5.3, "goods": ["Iron Ore", "Soybeans", "Crude Oil"]},
+    {"iso2": "CL", "name": "Chile",         "trade_usd_b": 15.2, "share_pct":  4.1, "goods": ["Vehicles", "Machinery", "Chemicals"]}
+  ],
+  "FR": [
+    {"iso2": "DE", "name": "Germany",       "trade_usd_b": 167.0, "share_pct": 14.8, "goods": ["Vehicles", "Machinery", "Chemicals"]},
+    {"iso2": "US", "name": "United States", "trade_usd_b":  95.3, "share_pct":  8.4, "goods": ["Aircraft", "Pharmaceuticals", "Luxury Goods"]},
+    {"iso2": "GB", "name": "United Kingdom","trade_usd_b":  76.1, "share_pct":  6.7, "goods": ["Aircraft", "Pharmaceuticals", "Vehicles"]},
+    {"iso2": "IT", "name": "Italy",         "trade_usd_b":  72.8, "share_pct":  6.4, "goods": ["Vehicles", "Machinery", "Chemicals"]},
+    {"iso2": "ES", "name": "Spain",         "trade_usd_b":  62.4, "share_pct":  5.5, "goods": ["Vehicles", "Aircraft", "Chemicals"]}
+  ],
+  "NG": [
+    {"iso2": "IN", "name": "India",         "trade_usd_b": 11.4, "share_pct": 14.2, "goods": ["Crude Oil", "LNG", "Petroleum"]},
+    {"iso2": "ES", "name": "Spain",         "trade_usd_b":  9.5, "share_pct": 11.8, "goods": ["Crude Oil", "Petroleum Products"]},
+    {"iso2": "CN", "name": "China",         "trade_usd_b":  7.7, "share_pct":  9.6, "goods": ["Crude Oil", "Refined Products"]},
+    {"iso2": "FR", "name": "France",        "trade_usd_b":  6.5, "share_pct":  8.1, "goods": ["Crude Oil", "LNG"]},
+    {"iso2": "NL", "name": "Netherlands",   "trade_usd_b":  5.8, "share_pct":  7.2, "goods": ["Crude Oil", "Petroleum Products"]}
+  ],
+  "KE": [
+    {"iso2": "UG", "name": "Uganda",        "trade_usd_b": 0.82, "share_pct": 11.3, "goods": ["Tea", "Horticulture", "Cement"]},
+    {"iso2": "US", "name": "United States", "trade_usd_b": 0.70, "share_pct":  9.7, "goods": ["Tea", "Apparel", "Coffee"]},
+    {"iso2": "PK", "name": "Pakistan",      "trade_usd_b": 0.54, "share_pct":  7.4, "goods": ["Tea", "Flowers"]},
+    {"iso2": "CN", "name": "China",         "trade_usd_b": 0.50, "share_pct":  6.9, "goods": ["Tea", "Sesame"]},
+    {"iso2": "NL", "name": "Netherlands",   "trade_usd_b": 0.44, "share_pct":  6.1, "goods": ["Flowers", "Coffee", "Tea"]}
+  ],
+  "MX": [
+    {"iso2": "US", "name": "United States", "trade_usd_b": 455.0, "share_pct": 79.4, "goods": ["Vehicles", "Electronics", "Machinery"]},
+    {"iso2": "CN", "name": "China",         "trade_usd_b":  28.4, "share_pct":  5.0, "goods": ["Electronics", "Machinery", "Chemicals"]},
+    {"iso2": "CA", "name": "Canada",        "trade_usd_b":  19.7, "share_pct":  3.4, "goods": ["Vehicles", "Machinery", "Oil & Gas"]},
+    {"iso2": "DE", "name": "Germany",       "trade_usd_b":  11.8, "share_pct":  2.1, "goods": ["Vehicles", "Machinery", "Chemicals"]},
+    {"iso2": "JP", "name": "Japan",         "trade_usd_b":   9.4, "share_pct":  1.6, "goods": ["Vehicles", "Electronics", "Machinery"]}
+  ],
+  "ZA": [
+    {"iso2": "CN", "name": "China",         "trade_usd_b": 21.3, "share_pct": 16.4, "goods": ["Iron Ore", "Coal", "Platinum"]},
+    {"iso2": "US", "name": "United States", "trade_usd_b": 11.8, "share_pct":  9.1, "goods": ["Platinum", "Vehicles", "Iron & Steel"]},
+    {"iso2": "DE", "name": "Germany",       "trade_usd_b":  9.7, "share_pct":  7.5, "goods": ["Vehicles", "Machinery", "Platinum"]},
+    {"iso2": "JP", "name": "Japan",         "trade_usd_b":  8.2, "share_pct":  6.3, "goods": ["Platinum", "Iron Ore", "Coal"]},
+    {"iso2": "IN", "name": "India",         "trade_usd_b":  7.4, "share_pct":  5.7, "goods": ["Coal", "Iron Ore", "Chemicals"]}
+  ],
+  "GB": [
+    {"iso2": "US", "name": "United States", "trade_usd_b": 118.0, "share_pct": 14.8, "goods": ["Machinery", "Pharmaceuticals", "Aircraft"]},
+    {"iso2": "DE", "name": "Germany",       "trade_usd_b":  86.4, "share_pct": 10.8, "goods": ["Vehicles", "Machinery", "Chemicals"]},
+    {"iso2": "CN", "name": "China",         "trade_usd_b":  71.2, "share_pct":  8.9, "goods": ["Electronics", "Machinery", "Pharmaceuticals"]},
+    {"iso2": "NL", "name": "Netherlands",   "trade_usd_b":  64.5, "share_pct":  8.1, "goods": ["Oil & Gas", "Chemicals", "Machinery"]},
+    {"iso2": "FR", "name": "France",        "trade_usd_b":  56.8, "share_pct":  7.1, "goods": ["Aircraft", "Pharmaceuticals", "Vehicles"]}
+  ],
+  "MY": [
+    {"iso2": "SG", "name": "Singapore",     "trade_usd_b": 67.4, "share_pct": 14.2, "goods": ["Electronics", "Machinery", "Chemicals"]},
+    {"iso2": "CN", "name": "China",         "trade_usd_b": 60.1, "share_pct": 12.7, "goods": ["Electronics", "Semiconductors", "Palm Oil"]},
+    {"iso2": "US", "name": "United States", "trade_usd_b": 52.3, "share_pct": 11.0, "goods": ["Electronics", "Semiconductors", "Machinery"]},
+    {"iso2": "JP", "name": "Japan",         "trade_usd_b": 29.8, "share_pct":  6.3, "goods": ["Electronics", "LNG", "Rubber"]},
+    {"iso2": "HK", "name": "Hong Kong",     "trade_usd_b": 22.6, "share_pct":  4.8, "goods": ["Electronics", "Machinery", "Plastics"]}
+  ],
+  "CL": [
+    {"iso2": "CN", "name": "China",         "trade_usd_b": 28.4, "share_pct": 37.2, "goods": ["Copper", "Lithium", "Pulp"]},
+    {"iso2": "US", "name": "United States", "trade_usd_b": 12.6, "share_pct": 16.5, "goods": ["Copper", "Fruit", "Wine"]},
+    {"iso2": "JP", "name": "Japan",         "trade_usd_b":  8.3, "share_pct": 10.9, "goods": ["Copper", "Fish", "Lithium"]},
+    {"iso2": "BR", "name": "Brazil",        "trade_usd_b":  4.7, "share_pct":  6.2, "goods": ["Copper", "Fruit", "Chemicals"]},
+    {"iso2": "KR", "name": "South Korea",   "trade_usd_b":  4.1, "share_pct":  5.4, "goods": ["Copper", "Lithium", "Fish"]}
+  ],
+  "HT": [
+    {"iso2": "US", "name": "United States", "trade_usd_b": 0.92, "share_pct": 82.3, "goods": ["Apparel", "Textiles", "Manufactured Goods"]},
+    {"iso2": "CA", "name": "Canada",        "trade_usd_b": 0.06, "share_pct":  5.4, "goods": ["Apparel", "Textiles"]},
+    {"iso2": "FR", "name": "France",        "trade_usd_b": 0.03, "share_pct":  2.7, "goods": ["Apparel", "Coffee", "Cacao"]},
+    {"iso2": "DE", "name": "Germany",       "trade_usd_b": 0.02, "share_pct":  1.8, "goods": ["Apparel", "Textiles"]},
+    {"iso2": "BE", "name": "Belgium",       "trade_usd_b": 0.01, "share_pct":  0.9, "goods": ["Coffee", "Cacao", "Textiles"]}
+  ]
+}

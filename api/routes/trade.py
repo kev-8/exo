@@ -11,7 +11,14 @@ from pydantic import BaseModel
 router = APIRouter()
 
 _DATA_PATH = Path(__file__).parent.parent / "data" / "trade_flows.json"
-_TRADE_DATA: dict = json.loads(_DATA_PATH.read_text())
+_TRADE_DATA: dict | None = None
+
+
+def _load() -> dict:
+    global _TRADE_DATA
+    if _TRADE_DATA is None:
+        _TRADE_DATA = json.loads(_DATA_PATH.read_text())
+    return _TRADE_DATA
 
 
 class TradePartner(BaseModel):
@@ -31,7 +38,7 @@ class TradeFlowResponse(BaseModel):
 def get_trade_flows(iso2: str):
     """Top 5 export partners and goods categories for a country."""
     iso2 = iso2.upper()
-    partners = _TRADE_DATA.get(iso2)
+    partners = _load().get(iso2)
     if not partners:
         raise HTTPException(status_code=404, detail=f"No trade data for '{iso2}'")
     return TradeFlowResponse(
