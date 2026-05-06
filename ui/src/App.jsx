@@ -8,7 +8,7 @@ import CountrySelector from './components/CountrySelector'
 import ShowcaseCard from './components/ShowcaseCard'
 import { api } from './lib/api'
 
-const SHOWCASE_COUNTRIES = ['TW', 'RU', 'IN', 'IR', 'IL', 'UA', 'US', 'PK', 'KP']
+const SHOWCASE_COUNTRIES = ['TW', 'RU', 'IR', 'KE', 'FR', 'NG', 'BR', 'US']
 
 export default function App() {
   const [countries,       setCountries]       = useState([])

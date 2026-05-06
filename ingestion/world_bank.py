@@ -21,16 +21,17 @@ INDICATORS: dict[str, tuple[str, int]] = {
     "GC.DOD.TOTL.GD.ZS": ("debt_to_gdp", 1),            # Debt % GDP
     "SL.UEM.TOTL.ZS": ("unemployment_rate", 1),          # Unemployment %
     "NY.GNS.ICTR.ZS": ("gross_savings", -1),             # Gross savings %
-    "PV.EST": ("political_stability", -1),               # WGI: Political Stability & Absence of Violence (-2.5 to 2.5)
-    "VA.EST": ("voice_accountability", -1),              # WGI: Voice & Accountability (-2.5 to 2.5)
-    "RL.EST": ("rule_of_law", -1),                       # WGI: Rule of Law (-2.5 to 2.5)
-    "CC.EST": ("control_of_corruption", -1),             # WGI: Control of Corruption (-2.5 to 2.5)
+    # WGI indicators (PV.EST, VA.EST, RL.EST, CC.EST) were archived from the WB API in 2026.
+    # WGI data is seeded directly via scripts/seed_wgi.py — do not fetch here.
     "EG.IMP.CONS.ZS": ("energy_imports_pct", 1),        # Energy imports as % of total energy use
     "NE.EXP.GNFS.ZS": ("exports_pct_gdp", -1),         # Exports of goods & services (% of GDP)
     "NE.IMP.GNFS.ZS": ("imports_pct_gdp", 1),           # Imports of goods & services (% of GDP)
 }
 
-COUNTRIES = ["US", "RU", "CN", "UA", "IL", "IR", "IN", "PK"]
+COUNTRIES = [
+    "US", "RU", "CN", "UA", "IL", "IR", "IN", "PK", "KP", "TW",
+    "HT", "BR", "MX", "NG", "KE", "ZA", "FR", "GB", "MY", "CL",
+]
 
 
 class WorldBankIngestor(BaseIngestor):
@@ -76,7 +77,6 @@ class WorldBankIngestor(BaseIngestor):
         now = raw.fetched_at
         records: list[FeatureRecord] = []
 
-        WGI_INDICATORS = {"PV.EST", "VA.EST", "RL.EST", "CC.EST"}
         # Energy imports: range roughly -200 to 100 (% of energy use); normalise to [0,1]
         ENERGY_IMPORT_INDICATORS = {"EG.IMP.CONS.ZS"}
 
@@ -85,11 +85,7 @@ class WorldBankIngestor(BaseIngestor):
             if val is None:
                 continue
 
-            if indicator_id in WGI_INDICATORS:
-                # WGI scale: -2.5 (worst) to +2.5 (best) → normalise to [0, 1]
-                normalised = (float(val) + 2.5) / 5.0
-                store_val = normalised
-            elif indicator_id in ENERGY_IMPORT_INDICATORS:
+            if indicator_id in ENERGY_IMPORT_INDICATORS:
                 # Energy imports % range: ~-100 (large exporter) to 100 (fully import dependent)
                 # Normalise to [0, 1]: 0% neutral → 0.5, 100% imports → 1.0, -100% exports → 0.0
                 store_val = max(0.0, min(1.0, (float(val) + 100) / 200))

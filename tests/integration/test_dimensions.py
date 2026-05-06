@@ -74,14 +74,15 @@ class TestPoliticalStability:
 # ---------------------------------------------------------------------------
 
 class TestConflictIntensity:
-    def test_defaults_to_0_3_with_no_data(self, scorer):
+    def test_defaults_to_0_5_with_no_data(self, scorer):
+        # Default changed to 0.5 (neutral) so missing UCDP data doesn't suppress scores
         dim = scorer.conflict_intensity("XX", _now())
-        assert abs(dim.score - 0.3) < 1e-6
+        assert abs(dim.score - 0.5) < 1e-6
 
-    def test_no_signals_defaults_to_0_3(self, scorer, store):
-        # With no ACLED or GDELT magnitude data, score stays at 0.3
+    def test_no_signals_defaults_to_0_5(self, scorer, store):
+        # With no UCDP or GDELT magnitude data, score stays at neutral 0.5
         dim = scorer.conflict_intensity("US", _now())
-        assert abs(dim.score - 0.3) < 1e-6
+        assert abs(dim.score - 0.5) < 1e-6
 
     def test_weight(self, scorer):
         dim = scorer.conflict_intensity("XX", _now())

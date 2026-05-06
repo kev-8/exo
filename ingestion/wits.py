@@ -36,6 +36,9 @@ ISO2_TO_WITS: dict[str, str] = {
     "US": "USA", "RU": "RUS", "CN": "CHN", "UA": "UKR",
     "IL": "ISR", "IR": "IRN", "IN": "IND", "PK": "PAK",
     "KP": "PRK", "TW": "TWN",
+    "HT": "HTI", "BR": "BRA", "MX": "MEX", "NG": "NGA",
+    "KE": "KEN", "ZA": "ZAF", "FR": "FRA", "GB": "GBR",
+    "MY": "MYS", "CL": "CHL",
     # Extended set — potential sanctioned partners (not tracked countries)
     "BY": "BLR", "VE": "VEN", "SY": "SYR", "CU": "CUB",
     "SD": "SDN", "MM": "MMR", "IQ": "IRQ", "LB": "LBN",
@@ -50,6 +53,9 @@ TRACKED_COUNTRIES: dict[str, str] = {
     "US": "USA", "RU": "RUS", "CN": "CHN", "UA": "UKR",
     "IL": "ISR", "IR": "IRN", "IN": "IND", "PK": "PAK",
     "KP": "PRK", "TW": "TWN",
+    "HT": "HTI", "BR": "BRA", "MX": "MEX", "NG": "NGA",
+    "KE": "KEN", "ZA": "ZAF", "FR": "FRA", "GB": "GBR",
+    "MY": "MYS", "CL": "CHL",
 }
 
 PARTNER_WORLD = "WLD"

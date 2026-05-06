@@ -17,7 +17,10 @@ from exo.store.index_store import IndexStore
 
 logger = logging.getLogger(__name__)
 
-COUNTRIES = ["US", "RU", "CN", "UA", "IL", "IR", "IN", "PK", "KP", "TW"]
+COUNTRIES = [
+    "US", "RU", "CN", "UA", "IL", "IR", "IN", "PK", "KP", "TW",
+    "HT", "BR", "MX", "NG", "KE", "ZA", "FR", "GB", "MY", "CL",
+]
 
 
 class RiskIndexEngine:

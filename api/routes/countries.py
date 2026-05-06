@@ -18,6 +18,16 @@ COUNTRY_META: dict[str, dict] = {
     "PK": {"name": "Pakistan",      "flag": "🇵🇰", "lat":  30.38, "lon":  69.35, "region": "South Asia"},
     "KP": {"name": "North Korea",   "flag": "🇰🇵", "lat":  40.34, "lon": 127.51, "region": "East Asia"},
     "TW": {"name": "Taiwan",        "flag": "🇹🇼", "lat":  23.70, "lon": 120.96, "region": "East Asia"},
+    "HT": {"name": "Haiti",         "flag": "🇭🇹", "lat":  18.97, "lon": -72.29, "region": "Caribbean"},
+    "BR": {"name": "Brazil",        "flag": "🇧🇷", "lat": -14.24, "lon": -51.93, "region": "South America"},
+    "MX": {"name": "Mexico",        "flag": "🇲🇽", "lat":  23.63, "lon": -102.55,"region": "North America"},
+    "NG": {"name": "Nigeria",       "flag": "🇳🇬", "lat":   9.08, "lon":   8.68, "region": "West Africa"},
+    "KE": {"name": "Kenya",         "flag": "🇰🇪", "lat":  -0.02, "lon":  37.91, "region": "East Africa"},
+    "ZA": {"name": "South Africa",  "flag": "🇿🇦", "lat": -30.56, "lon":  22.94, "region": "Southern Africa"},
+    "FR": {"name": "France",        "flag": "🇫🇷", "lat":  46.23, "lon":   2.21, "region": "Europe"},
+    "GB": {"name": "United Kingdom","flag": "🇬🇧", "lat":  55.38, "lon":  -3.44, "region": "Europe"},
+    "MY": {"name": "Malaysia",      "flag": "🇲🇾", "lat":   4.21, "lon": 108.07, "region": "Southeast Asia"},
+    "CL": {"name": "Chile",         "flag": "🇨🇱", "lat": -35.68, "lon": -71.54, "region": "South America"},
 }
 
 

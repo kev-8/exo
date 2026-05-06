@@ -26,16 +26,10 @@ DATAVERSE_FILE_URL = "https://dataverse.harvard.edu/api/access/datafile/13642025
 
 # ISO 3166-1 alpha-3 → alpha-2 mapping for tracked countries
 ISO3_TO_ISO2: dict[str, str] = {
-    "USA": "US",
-    "RUS": "RU",
-    "CHN": "CN",
-    "UKR": "UA",
-    "ISR": "IL",
-    "IRN": "IR",
-    "PRK": "KP",
-    "TWN": "TW",
-    "IND": "IN",
-    "PAK": "PK",
+    "USA": "US", "RUS": "RU", "CHN": "CN", "UKR": "UA", "ISR": "IL",
+    "IRN": "IR", "PRK": "KP", "TWN": "TW", "IND": "IN", "PAK": "PK",
+    "HTI": "HT", "BRA": "BR", "MEX": "MX", "NGA": "NG", "KEN": "KE",
+    "ZAF": "ZA", "FRA": "FR", "GBR": "GB", "MYS": "MY", "CHL": "CL",
 }
 
 # Number of years to use for variance calculation

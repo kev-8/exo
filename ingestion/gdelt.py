@@ -26,16 +26,13 @@ except ImportError:
 
 # Maps ISO country code → GDELT search keyword
 COUNTRY_KEYWORD_MAP: dict[str, str] = {
-    "US": "United States",
-    "RU": "Russia",
-    "CN": "China",
-    "UA": "Ukraine",
-    "IL": "Israel",
-    "IR": "Iranian",
-    "KP": "North Korea",
-    "TW": "Taiwan",
-    "IN": "India",
-    "PK": "Pakistan",
+    "US": "United States", "RU": "Russia",        "CN": "China",
+    "UA": "Ukraine",       "IL": "Israel",         "IR": "Iranian",
+    "KP": "North Korea",   "TW": "Taiwan",         "IN": "India",
+    "PK": "Pakistan",      "HT": "Haiti",          "BR": "Brazil",
+    "MX": "Mexico",        "NG": "Nigeria",         "KE": "Kenya",
+    "ZA": "South Africa",  "FR": "France",          "GB": "United Kingdom",
+    "MY": "Malaysia",      "CL": "Chile",
 }
 
 

@@ -44,16 +44,10 @@ def _auth_headers() -> dict[str, str]:
 # ISO 3166-1 alpha-2 → UCDP country_id mapping (GW codes used by UCDP)
 # Source: https://ucdp.uu.se/downloads/
 ISO2_TO_UCDP: dict[str, int] = {
-    "US": 2,
-    "RU": 365,
-    "CN": 710,
-    "UA": 369,
-    "IL": 666,
-    "IR": 630,
-    "IN": 750,
-    "PK": 770,
-    "KP": 731,
-    "TW": 713,
+    "US": 2,   "RU": 365, "CN": 710, "UA": 369, "IL": 666,
+    "IR": 630, "IN": 750, "PK": 770, "KP": 731, "TW": 713,
+    "HT": 41,  "BR": 140, "MX": 70,  "NG": 475, "KE": 501,
+    "ZA": 560, "FR": 220, "GB": 200, "MY": 820, "CL": 155,
 }
 
 # Fallback rolling-max values used when the feature store has no history yet

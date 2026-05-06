@@ -30,6 +30,7 @@ export default function CountrySelector({ countries, selected, onSelect, onOpenC
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedCountry = countries?.find(c => c.iso2 === selected)
+  const sortedCountries = countries ? [...countries].sort((a, b) => a.name.localeCompare(b.name)) : []
 
   return (
     <div ref={ref} className="relative w-full">
@@ -70,22 +71,23 @@ export default function CountrySelector({ countries, selected, onSelect, onOpenC
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.15 }}
-            className="absolute bottom-full left-0 right-0 mb-1 rounded z-50 overflow-hidden"
+            className="absolute bottom-full left-0 right-0 mb-1 rounded z-50"
             style={{
               background: 'rgba(255,255,255,0.03)',
               border: '1.5px solid white',
               boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
-              padding: '0.5rem',
+              padding: '0.25rem',
             }}
           >
-            {countries?.map((c) => (
+            <div style={{ maxHeight: '14rem', overflowY: 'auto' }}>
+            {sortedCountries.map((c) => (
               <button
                 key={c.iso2}
                 onClick={() => { onSelect(c.iso2); setOpenWithCallback(false) }}
-                className="w-full flex items-center gap-3 text-left transition-all duration-150 font-mono rounded"
+                className="w-full flex items-center gap-2.5 text-left transition-all duration-150 font-mono rounded"
                 style={{
-                  padding: '0.75rem 1rem',
-                  fontSize: '0.95rem',
+                  padding: '0.45rem 0.75rem',
+                  fontSize: '0.85rem',
                   background: c.iso2 === selected ? 'rgba(0,230,118,0.08)' : 'transparent',
                   color: c.iso2 === selected ? '#00E676' : 'white',
                   borderLeft: c.iso2 === selected ? '2px solid #00E676' : '2px solid transparent',
@@ -97,11 +99,12 @@ export default function CountrySelector({ countries, selected, onSelect, onOpenC
                   if (c.iso2 !== selected) e.currentTarget.style.background = 'transparent'
                 }}
               >
-                <FlagImg iso2={c.iso2} size={26} />
+                <FlagImg iso2={c.iso2} size={22} />
                 <span>{c.name}</span>
                 <span className="ml-auto text-xs text-white/50">{c.iso2}</span>
               </button>
             ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
