@@ -10,7 +10,7 @@ exo ingests news events, conflict data, economic indicators, social sentiment, a
 
 Each dimension is decomposed into three tiers — **Structural** (annual baselines), **Short-term** (1–2 year trends), and **Acute** (7–30 day signals) — which blend into the dimension score using configurable per-dimension weights. The composite and all three tier-level aggregates are persisted with every snapshot.
 
-The risk index is updated every 6 hours across **20 tracked countries**. A React frontend serves a live 3D globe with per-country risk cards, trade flow arcs, and a real-time signal feed.
+The risk index is updated every 6 hours across **20 tracked countries** (more to come soon!). A React frontend serves a live 3D globe with per-country risk cards, trade flow arcs, and a real-time signal feed.
 
 ---
 
