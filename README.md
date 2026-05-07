@@ -1,5 +1,7 @@
 # exo
 
+**[exo.dosi.io](https://exo.dosi.io)**
+
 A geopolitical risk intelligence platform that produces a real-time country-level risk index.
 
 ---
@@ -8,7 +10,7 @@ A geopolitical risk intelligence platform that produces a real-time country-leve
 
 exo ingests news events, conflict data, economic indicators, social sentiment, and market data on a rolling schedule. It normalises all signals into a shared feature store, then computes a weighted composite risk score across five dimensions for each tracked country.
 
-Each dimension is decomposed into three tiers — **Structural** (annual baselines), **Short-term** (1–2 year trends), and **Acute** (7–30 day signals) — which blend into the dimension score using configurable per-dimension weights. The composite and all three tier-level aggregates are persisted with every snapshot.
+Each dimension is decomposed into three tiers — **Structural** (15 year baseline), **Short-term** (1–2 year trends), and **Acute** (7–30 day signals) — which blend into the dimension score using configurable per-dimension weights. The composite and all three tier-level aggregates are persisted with every snapshot.
 
 The risk index is updated every 6 hours across **20 tracked countries** (more to come soon!). A React frontend serves a live 3D globe with per-country risk cards, trade flow arcs, and a real-time signal feed.
 
@@ -87,11 +89,11 @@ cd ui && npm install && npm run build
 ```bash
 # Required for live data
 KALSHI_API_KEY_ID=...
-KALSHI_PRIVATE_KEY=...       # PEM content
+KALSHI_PRIVATE_KEY=...
 FRED_API_KEY=...
 FINNHUB_API_KEY=...
 EIA_API_KEY=...
-UCDP_API_TOKEN=...           # Request from mertcan.yilmaz@pcr.uu.se
+UCDP_API_TOKEN=...      
 
 # Optional overrides
 REDIS_URL=redis://localhost:6379/0
