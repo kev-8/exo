@@ -175,22 +175,26 @@ class FeatureStore:
     # Read
     # ------------------------------------------------------------------
 
-    def _glob_pattern(self, source: str | None = None) -> str:
+    def _parquet_files(self, source: str | None = None) -> list[str]:
         src_part = f"source={source}" if source else "source=*"
-        return str(self.data_dir / src_part / "date=*" / "*.parquet")
+        return [
+            str(p)
+            for p in self.data_dir.glob(f"{src_part}/date=*/*.parquet")
+            if not p.name.startswith("._")
+        ]
 
     def _load_df(self, source: str | None = None) -> pd.DataFrame | None:
-        pattern = self._glob_pattern(source)
+        files = self._parquet_files(source)
+        if not files:
+            return None
         try:
-            # Use a fresh connection per query — DuckDB in-memory connections are
-            # NOT thread-safe when shared across concurrent FastAPI requests.
             _db = duckdb.connect(":memory:")
             result = _db.execute(
-                f"SELECT * FROM read_parquet('{pattern}', union_by_name=true)"
+                "SELECT * FROM read_parquet($1, union_by_name=true)", [files]
             ).fetchdf()
             return result if not result.empty else None
         except Exception as exc:
-            logger.debug("No parquet data found (%s)", exc)
+            logger.warning("Parquet read failed: %s", exc)
             return None
 
     def read(self, query: FeatureQuery) -> list[FeatureRecord]:

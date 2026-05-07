@@ -17,6 +17,16 @@ from exo import config
 router = APIRouter()
 
 
+@router.delete("/admin/dotfiles", include_in_schema=False)
+def delete_dotfiles():
+    """Delete macOS ._* resource fork files from the data directory."""
+    deleted = []
+    for p in config.DATA_DIR.rglob("._*"):
+        p.unlink()
+        deleted.append(str(p))
+    return JSONResponse({"deleted": len(deleted), "files": deleted[:20]})
+
+
 @router.get("/admin/debug", include_in_schema=False)
 def debug():
     """Diagnose data directory and DuckDB reads."""

@@ -10,9 +10,10 @@ OUT="/tmp/exo_data.tar.gz"
 
 echo "Exporting essential data from $DATA_DIR ..."
 
-tar czf "$OUT" \
+COPYFILE_DISABLE=1 tar czf "$OUT" \
   -C "$DATA_DIR" \
   --exclude='./features/source=kalshi' \
+  --exclude='._*' \
   features/ risk_index/
 
 SIZE=$(du -sh "$OUT" | cut -f1)

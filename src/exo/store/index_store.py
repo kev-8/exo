@@ -87,16 +87,20 @@ class IndexStore:
         end_ts: datetime | None = None,
         limit: int = 1000,
     ) -> list[RiskIndexSnapshot]:
-        pattern = str(self.data_dir / f"country={country}" / "date=*" / "*.parquet")
+        files = [
+            str(p)
+            for p in (self.data_dir / f"country={country}").glob("date=*/*.parquet")
+            if not p.name.startswith("._")
+        ]
+        if not files:
+            return []
         try:
-            # Use a fresh connection per query — DuckDB in-memory connections are
-            # NOT thread-safe when shared across concurrent requests.
             _db = duckdb.connect(":memory:")
             df = _db.execute(
-                f"SELECT * FROM read_parquet('{pattern}', union_by_name=true)"
+                "SELECT * FROM read_parquet($1, union_by_name=true)", [files]
             ).fetchdf()
         except Exception as exc:
-            logger.debug("No index data for %s: %s", country, exc)
+            logger.warning("No index data for %s: %s", country, exc)
             return []
 
         if df.empty:
