@@ -66,8 +66,11 @@ class GDELTIngestor(BaseIngestor):
 
             tone_score: float | None = None
             try:
-                tone_df = await loop.run_in_executor(
-                    None, self._client.timeline_search, "timelinetone", f
+                tone_df = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None, self._client.timeline_search, "timelinetone", f
+                    ),
+                    timeout=20.0,
                 )
                 if tone_df is not None and not tone_df.empty:
                     tone_col = "Tone" if "Tone" in tone_df.columns else next(
@@ -76,6 +79,8 @@ class GDELTIngestor(BaseIngestor):
                     if tone_col:
                         raw_tone = float(tone_df[tone_col].mean())
                         tone_score = max(-1.0, min(1.0, raw_tone / 10.0))
+            except asyncio.TimeoutError:
+                logger.warning("GDELT fetch timed out for %s", iso_code)
             except Exception as exc:
                 logger.warning("GDELT fetch failed for %s: %s", iso_code, exc)
 

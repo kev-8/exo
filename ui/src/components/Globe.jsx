@@ -215,12 +215,6 @@ const Globe = forwardRef(function Globe({
       .then(data => { if (globeRef.current) globeRef.current.polygonsData(data.features) })
       .catch(() => {})
 
-    // Load country borders GeoJSON
-    fetch('https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson')
-      .then(r => r.json())
-      .then(data => { if (globeRef.current) globeRef.current.polygonsData(data.features) })
-      .catch(() => {})
-
     globe.renderer().setPixelRatio(window.devicePixelRatio)
     globe.controls().autoRotate      = true
     globe.controls().autoRotateSpeed = 0.35

@@ -67,9 +67,6 @@ class FeatureStore:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.backtest_mode = backtest_mode
 
-        self._db = duckdb.connect(":memory:")
-        self._db.execute("INSTALL parquet; LOAD parquet;")
-
         # Redis
         self._redis: Optional["redis.Redis"] = None  # type: ignore[name-defined]
         if _REDIS_AVAILABLE and (redis_url or config.REDIS_URL):
@@ -187,8 +184,8 @@ class FeatureStore:
         files = self._parquet_files(source)
         if not files:
             return None
+        _db = duckdb.connect(":memory:")
         try:
-            _db = duckdb.connect(":memory:")
             result = _db.execute(
                 "SELECT * FROM read_parquet($1, union_by_name=true)", [files]
             ).fetchdf()
@@ -196,6 +193,8 @@ class FeatureStore:
         except Exception as exc:
             logger.warning("Parquet read failed: %s", exc)
             return None
+        finally:
+            _db.close()
 
     def read(self, query: FeatureQuery) -> list[FeatureRecord]:
         """Return records matching *query*, honoring point-in-time semantics."""

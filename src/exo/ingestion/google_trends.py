@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -43,10 +44,17 @@ class GoogleTrendsIngestor(BaseIngestor):
         raws: list[RawRecord] = []
         now = self.utcnow()
 
+        loop = asyncio.get_event_loop()
         for group in KEYWORD_GROUPS:
             try:
-                self._pytrends.build_payload(group, timeframe="now 1-d", geo="")
-                df = self._pytrends.interest_over_time()
+                def _fetch_group(g=group):
+                    self._pytrends.build_payload(g, timeframe="now 1-d", geo="")
+                    return self._pytrends.interest_over_time()
+
+                df = await asyncio.wait_for(
+                    loop.run_in_executor(None, _fetch_group),
+                    timeout=30.0,
+                )
                 if df is None or df.empty:
                     continue
                 last_row = df.iloc[-1]
@@ -60,6 +68,8 @@ class GoogleTrendsIngestor(BaseIngestor):
                             fetched_at=now,
                         )
                     )
+            except asyncio.TimeoutError:
+                logger.warning("Google Trends fetch timed out for group %s", group)
             except Exception as exc:
                 logger.warning("Google Trends fetch failed for group %s: %s", group, exc)
 

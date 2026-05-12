@@ -30,8 +30,6 @@ class IndexStore:
     def __init__(self, data_dir: Path | str | None = None) -> None:
         self.data_dir = Path(data_dir or config.RISK_INDEX_DIR)
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self._db = duckdb.connect(":memory:")
-        self._db.execute("INSTALL parquet; LOAD parquet;")
 
     # ------------------------------------------------------------------
     # Write
@@ -94,14 +92,16 @@ class IndexStore:
         ]
         if not files:
             return []
+        _db = duckdb.connect(":memory:")
         try:
-            _db = duckdb.connect(":memory:")
             df = _db.execute(
                 "SELECT * FROM read_parquet($1, union_by_name=true)", [files]
             ).fetchdf()
         except Exception as exc:
             logger.warning("No index data for %s: %s", country, exc)
             return []
+        finally:
+            _db.close()
 
         if df.empty:
             return []
