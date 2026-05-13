@@ -18,6 +18,7 @@ OFAC ingestor should run before WITS each cycle so SDN data is fresh.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -147,7 +148,8 @@ class WITSIngestor(BaseIngestor):
         now = self.utcnow()
 
         # Resolve sanctioned partners from live OFAC data in the feature store
-        sanctioned_partners = self._get_sanctioned_partners()
+        loop = asyncio.get_event_loop()
+        sanctioned_partners = await loop.run_in_executor(None, self._get_sanctioned_partners)
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             for iso2, wits_code in TRACKED_COUNTRIES.items():

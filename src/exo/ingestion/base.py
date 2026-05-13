@@ -71,9 +71,10 @@ class BaseIngestor(ABC):
             return []
 
         written: list[FeatureRecord] = []
+        loop = asyncio.get_event_loop()
         for raw in raws:
             try:
-                records = self.normalise(raw)
+                records = await loop.run_in_executor(None, self.normalise, raw)
             except Exception as exc:
                 self._logger.warning(
                     "normalise() failed for source=%s entity=%s: %s",
@@ -85,7 +86,7 @@ class BaseIngestor(ABC):
 
             for record in records:
                 try:
-                    self.store.write(record)
+                    await loop.run_in_executor(None, self.store.write, record)
                     written.append(record)
                     event = FeatureUpdated(record=record)
                     await self.bus.publish(event)

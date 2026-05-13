@@ -155,12 +155,16 @@ class ExoScheduler:
         await loop.run_in_executor(None, self.risk_index.update_all)
 
     async def _staleness_check(self) -> None:
+        loop = asyncio.get_event_loop()
         for source, threshold_sec in config.STALENESS_THRESHOLDS.items():
-            rec = self.store.get_latest(
-                entity=None,
-                signal_type=None,
-                source=source,
-                max_age_sec=threshold_sec,
+            rec = await loop.run_in_executor(
+                None,
+                lambda src=source, thr=threshold_sec: self.store.get_latest(
+                    entity=None,
+                    signal_type=None,
+                    source=src,
+                    max_age_sec=thr,
+                ),
             )
             if rec is None:
                 alert = StalenessAlert(
