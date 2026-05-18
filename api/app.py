@@ -6,6 +6,8 @@ In production (Railway), also serves the Vite static build from ui/dist/.
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -22,6 +24,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Increase the default thread pool beyond Python's default of ~5 workers.
+    # Sync route handlers, staleness checks, and GDELT threads all share this pool;
+    # 5 workers is too few for concurrent page loads + background jobs.
+    loop = asyncio.get_event_loop()
+    loop.set_default_executor(concurrent.futures.ThreadPoolExecutor(max_workers=32))
+
     from exo.scheduler import ExoScheduler
     scheduler = ExoScheduler()
     await scheduler.start()
@@ -66,7 +74,7 @@ app.include_router(signals.router,   prefix="/api")
 
 
 @app.get("/api/health")
-def health():
+async def health():
     return {"status": "ok"}
 
 
