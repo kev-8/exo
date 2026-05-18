@@ -158,21 +158,20 @@ class ExoScheduler:
         loop = asyncio.get_event_loop()
         items = list(config.STALENESS_THRESHOLDS.items())
 
+        # Use filesystem mtime checks — no DuckDB, no parquet loading.
+        # Running 14 concurrent duckdb.connect(":memory:") caused OOM on Railway.
         results = await asyncio.gather(*[
             loop.run_in_executor(
                 None,
-                lambda src=source, thr=threshold_sec: self.store.get_latest(
-                    entity=None,
-                    signal_type=None,
-                    source=src,
-                    max_age_sec=thr,
-                ),
+                self.store.has_recent_data,
+                source,
+                threshold_sec,
             )
             for source, threshold_sec in items
         ])
 
-        for (source, threshold_sec), rec in zip(items, results):
-            if rec is None:
+        for (source, threshold_sec), is_fresh in zip(items, results):
+            if not is_fresh:
                 alert = StalenessAlert(
                     source=source,
                     entity="",

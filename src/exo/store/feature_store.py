@@ -172,6 +172,31 @@ class FeatureStore:
     # Read
     # ------------------------------------------------------------------
 
+    def has_recent_data(self, source: str, threshold_sec: float) -> bool:
+        """Return True if any parquet file for *source* was written within *threshold_sec*.
+
+        Uses filesystem mtime — no DuckDB, no parquet loading.
+        Safe to call concurrently from many threads.
+        """
+        import time
+        cutoff = time.time() - threshold_sec
+        src_dir = self.data_dir / f"source={source}"
+        if not src_dir.exists():
+            return False
+        date_dirs = sorted(
+            [p for p in src_dir.iterdir() if p.name.startswith("date=")],
+            reverse=True,
+        )
+        for date_dir in date_dirs[:3]:
+            for p in date_dir.iterdir():
+                if p.suffix == ".parquet" and not p.name.startswith("._"):
+                    try:
+                        if p.stat().st_mtime >= cutoff:
+                            return True
+                    except OSError:
+                        pass
+        return False
+
     def _parquet_files(self, source: str | None = None) -> list[str]:
         src_part = f"source={source}" if source else "source=*"
         return [
