@@ -5,6 +5,7 @@ Uses the ``fredapi`` library.  Emits a composite economic_indicator score.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -48,29 +49,31 @@ class FREDIngestor(BaseIngestor):
             logger.warning("FRED client unavailable; skipping fetch")
             return []
 
-        raws: list[RawRecord] = []
         now = self.utcnow()
-        values: dict[str, float] = {}
+        loop = asyncio.get_event_loop()
 
-        for series_id, sign in SERIES.items():
-            try:
-                s = self._fred.get_series(series_id, limit=1)
-                if s is not None and len(s) > 0:
-                    val = float(s.iloc[-1])
-                    values[series_id] = val
-            except Exception as exc:
-                logger.warning("FRED series %s failed: %s", series_id, exc)
+        def _fetch_all() -> dict[str, float]:
+            values: dict[str, float] = {}
+            for series_id in SERIES:
+                try:
+                    s = self._fred.get_series(series_id, limit=1)
+                    if s is not None and len(s) > 0:
+                        values[series_id] = float(s.iloc[-1])
+                except Exception as exc:
+                    logger.warning("FRED series %s failed: %s", series_id, exc)
+            return values
 
-        if values:
-            raws.append(
-                RawRecord(
-                    source=self.source,
-                    entity="US",
-                    raw=values,
-                    fetched_at=now,
-                )
+        try:
+            values = await asyncio.wait_for(
+                loop.run_in_executor(None, _fetch_all), timeout=60.0
             )
-        return raws
+        except asyncio.TimeoutError:
+            logger.warning("FRED fetch timed out after 60s")
+            return []
+
+        if not values:
+            return []
+        return [RawRecord(source=self.source, entity="US", raw=values, fetched_at=now)]
 
     def normalise(self, raw: RawRecord) -> list[FeatureRecord]:
         now = raw.fetched_at
