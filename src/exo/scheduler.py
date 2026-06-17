@@ -78,9 +78,11 @@ class ExoScheduler:
     def setup_jobs(self) -> None:
         """Register all scheduled jobs."""
 
-        # GDELT — every 15 min
-        self._add_ingestor_job(self.gdelt, "gdelt_ingest",
-                               trigger=IntervalTrigger(minutes=15))
+        # GDELT — disabled: gdeltdoc library consistently fails on Railway
+        # (empty-message exceptions for every country every cycle).
+        # Re-enable by uncommenting once the upstream API/library issue is resolved.
+        # self._add_ingestor_job(self.gdelt, "gdelt_ingest",
+        #                        trigger=IntervalTrigger(minutes=15))
 
         # Kalshi market data — every 15 min
         self._add_ingestor_job(self.kalshi, "kalshi_rest",

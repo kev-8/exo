@@ -10,6 +10,7 @@ import asyncio
 import concurrent.futures
 import logging
 import os
+import signal
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -22,13 +23,22 @@ from api.routes import countries, risk, signals, trade
 logger = logging.getLogger(__name__)
 
 
+def _asyncio_exception_handler(loop, context):
+    exc = context.get("exception")
+    msg = repr(exc) if exc else context.get("message", "unknown")
+    logger.critical("Unhandled asyncio exception: %s", msg, exc_info=exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Increase the default thread pool beyond Python's default of ~5 workers.
-    # Sync route handlers, staleness checks, and GDELT threads all share this pool;
-    # 5 workers is too few for concurrent page loads + background jobs.
     loop = asyncio.get_event_loop()
     loop.set_default_executor(concurrent.futures.ThreadPoolExecutor(max_workers=32))
+    loop.set_exception_handler(_asyncio_exception_handler)
+
+    # Log on SIGTERM so Railway crash logs include a final message before SIGKILL.
+    def _on_sigterm(*_):
+        logger.critical("SIGTERM received — process about to exit")
+    signal.signal(signal.SIGTERM, _on_sigterm)
 
     from exo.scheduler import ExoScheduler
     scheduler = ExoScheduler()

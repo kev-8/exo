@@ -70,7 +70,7 @@ class BaseIngestor(ABC):
             self._logger.error("fetch() failed for source=%s: %s", self.source, exc)
             return []
 
-        written: list[FeatureRecord] = []
+        all_records: list[FeatureRecord] = []
         loop = asyncio.get_event_loop()
         for raw in raws:
             try:
@@ -83,17 +83,19 @@ class BaseIngestor(ABC):
                     exc,
                 )
                 continue
+            all_records.extend(records)
 
-            for record in records:
-                try:
-                    await loop.run_in_executor(None, self.store.write, record)
-                    written.append(record)
-                    event = FeatureUpdated(record=record)
-                    await self.bus.publish(event)
-                except Exception as exc:
-                    self._logger.error(
-                        "write() failed for record %s: %s", record.record_id, exc
-                    )
+        written: list[FeatureRecord] = []
+        if all_records:
+            try:
+                await loop.run_in_executor(None, self.store.write_batch, all_records)
+                written = all_records
+            except Exception as exc:
+                self._logger.error("write_batch() failed for source=%s: %s", self.source, exc)
+
+            for record in written:
+                event = FeatureUpdated(record=record)
+                await self.bus.publish(event)
 
         self._logger.info(
             "Ingest cycle complete for source=%s: %d records written",

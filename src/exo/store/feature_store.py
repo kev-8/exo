@@ -113,8 +113,49 @@ class FeatureStore:
         self._cache_set(record)
 
     def write_batch(self, records: list[FeatureRecord]) -> None:
+        """Write all records in one parquet file per (source, date) group.
+
+        Far more efficient than calling write() per-record: one to_parquet()
+        call instead of N, which prevents pyarrow allocator bloat under high
+        write rates (e.g. Kalshi 600 records/15 min → 1 file/15 min).
+        """
+        if not records:
+            return
+
+        import uuid
+        from collections import defaultdict
+
+        groups: dict[tuple[str, str], list[FeatureRecord]] = defaultdict(list)
         for r in records:
-            self.write(r)
+            date_str = r.as_of_ts.strftime("%Y-%m-%d")
+            groups[(r.source, date_str)].append(r)
+
+        for (source, date_str), group in groups.items():
+            partition = self.data_dir / f"source={source}" / f"date={date_str}"
+            partition.mkdir(parents=True, exist_ok=True)
+
+            rows = [
+                {
+                    "record_id": r.record_id,
+                    "source": r.source,
+                    "entity": r.entity,
+                    "signal_type": r.signal_type,
+                    "value": r.value,
+                    "metadata": json.dumps(r.metadata),
+                    "ticker": r.ticker,
+                    "as_of_ts": r.as_of_ts.isoformat(),
+                    "ingested_at": r.ingested_at.isoformat(),
+                }
+                for r in group
+            ]
+            df = pd.DataFrame(rows)
+            batch_id = str(uuid.uuid4())[:8]
+            out_path = partition / f"batch_{batch_id}.parquet"
+            df.to_parquet(out_path, index=False)
+            logger.debug("Wrote batch of %d records → %s", len(group), out_path)
+
+            for r in group:
+                self._cache_set(r)
 
     # ------------------------------------------------------------------
     # Redis cache helpers

@@ -49,7 +49,6 @@ STALENESS_THRESHOLDS: dict[str, float] = {
     "world_bank": 24 * 3600,
     "eia": 24 * 3600,
     "polymarket": 60 * 60,
-    "acled": 7 * 24 * 3600,          # weekly
     "unga_votes": 7 * 24 * 3600,     # weekly
     "wits": 7 * 24 * 3600,           # weekly poll, annual data
     "ofac": 7 * 24 * 3600,           # weekly poll (SDN list updated frequently)
