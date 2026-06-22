@@ -90,6 +90,25 @@ class KalshiIngestor(BaseIngestor):
         now = self.utcnow()
 
         async with httpx.AsyncClient(timeout=30.0) as client:
+            # Fetch event → category map first
+            event_categories: dict[str, str] = {}
+            try:
+                evt_path = "/events"
+                evt_headers = _build_auth_headers("GET", "/trade-api/v2" + evt_path)
+                evt_resp = await client.get(
+                    config.KALSHI_BASE_URL + evt_path,
+                    headers=evt_headers,
+                    params={"status": "open", "limit": 200},
+                )
+                if evt_resp.status_code == 200:
+                    for evt in evt_resp.json().get("events", []):
+                        et = evt.get("event_ticker", "")
+                        cat = evt.get("category", "")
+                        if et and cat:
+                            event_categories[et] = cat
+            except Exception as exc:
+                logger.warning("Kalshi events fetch failed: %s", exc)
+
             # Fetch markets page
             try:
                 path = "/markets"
@@ -111,7 +130,9 @@ class KalshiIngestor(BaseIngestor):
 
                 for m in markets:
                     ob = self._orderbook.get(m.get("ticker", ""), {})
-                    raw = {**m, "orderbook": ob}
+                    event_ticker = m.get("event_ticker", "")
+                    category = event_categories.get(event_ticker, "")
+                    raw = {**m, "orderbook": ob, "category": category}
                     raws.append(
                         RawRecord(
                             source=self.source,
@@ -163,6 +184,8 @@ class KalshiIngestor(BaseIngestor):
                     "status": m.get("status", ""),
                     "title": m.get("title", ""),
                     "close_time": close_str,
+                    "category": m.get("category", ""),
+                    "event_ticker": m.get("event_ticker", ""),
                 },
                 ticker=ticker,
                 as_of_ts=now,
