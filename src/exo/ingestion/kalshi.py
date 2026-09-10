@@ -1,7 +1,7 @@
-"""Kalshi ingestor — RSA-PSS auth, WebSocket orderbook, REST metadata.
+"""Kalshi ingestor — RSA-PSS auth, REST metadata.
 
-WebSocket maintains a persistent connection for live orderbook updates.
-REST polls market metadata every 15 minutes.
+REST polls market metadata every 15 minutes, scoped to a category-filtered
+set of series (see _refresh_focused_series / _refresh_active_series below).
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import hashlib
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -22,6 +22,20 @@ from exo.ingestion.base import BaseIngestor
 from exo.models import FeatureRecord, KalshiMarket, RawRecord
 
 logger = logging.getLogger(__name__)
+
+# How often to re-pull the full series catalog (rarely changes — new series
+# are added occasionally, not continuously).
+_SERIES_REFRESH_INTERVAL = timedelta(hours=24)
+
+# How often to re-probe *every* focused series for open markets, to catch
+# series that just became active. Between refreshes, only the already-active
+# subset is polled (cheap — most focused series have nothing open at any
+# given moment).
+_ACTIVE_REFRESH_INTERVAL = timedelta(hours=1)
+
+# Max concurrent /markets requests during a series probe. Kept modest to
+# stay well under Kalshi's rate limit even when probing all ~6k series.
+_PROBE_CONCURRENCY = 20
 
 _CRYPTO_AVAILABLE = False
 try:
@@ -71,15 +85,105 @@ def _build_auth_headers(method: str, path: str) -> dict[str, str]:
 
 
 class KalshiIngestor(BaseIngestor):
-    """Ingest Kalshi market data via REST + WebSocket."""
+    """Ingest Kalshi market data via REST."""
 
     source = "kalshi"
 
-    def __init__(self, tickers: list[str] | None = None, **kwargs) -> None:
+    def __init__(
+        self,
+        tickers: list[str] | None = None,
+        categories: set[str] | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self.tickers = tickers or []
-        self._ws_task: asyncio.Task | None = None
-        self._orderbook: dict[str, dict] = {}
+        self.categories = categories or config.FOCUSED_CATEGORIES
+
+        # series_ticker -> category, for every series in self.categories.
+        self._series_category: dict[str, str] = {}
+        self._series_refreshed_at: datetime | None = None
+
+        # Subset of _series_category currently believed to have open markets.
+        self._active_series: set[str] = set()
+        self._active_refreshed_at: datetime | None = None
+
+    # ------------------------------------------------------------------
+    # Series discovery
+    # ------------------------------------------------------------------
+
+    async def _refresh_focused_series(self, client: httpx.AsyncClient) -> None:
+        """Rebuild the series -> category allowlist from /series.
+
+        A single unpaginated call returns the entire series catalog (~14k
+        entries); filtering client-side to self.categories is far cheaper
+        than discovering relevant series by paging through /markets or
+        /events, both of which are dominated by high-frequency synthetic
+        markets unrelated to these categories.
+        """
+        path = "/series"
+        headers = _build_auth_headers("GET", "/trade-api/v2" + path)
+        try:
+            resp = await client.get(config.KALSHI_BASE_URL + path, headers=headers)
+            resp.raise_for_status()
+            all_series = resp.json().get("series", [])
+        except Exception as exc:
+            logger.warning("Kalshi /series refresh failed: %s", exc)
+            return
+
+        self._series_category = {
+            s["ticker"]: s["category"]
+            for s in all_series
+            if s.get("ticker") and s.get("category") in self.categories
+        }
+        self._series_refreshed_at = self.utcnow()
+        logger.info(
+            "Kalshi focused-series allowlist refreshed: %d series across %d categories",
+            len(self._series_category), len(self.categories),
+        )
+
+    async def _probe_series(
+        self, client: httpx.AsyncClient, series_ticker: str, sem: asyncio.Semaphore
+    ) -> list[dict]:
+        """Return currently open markets for one series (empty if none/error)."""
+        async with sem:
+            path = "/markets"
+            headers = _build_auth_headers("GET", "/trade-api/v2" + path)
+            try:
+                resp = await client.get(
+                    config.KALSHI_BASE_URL + path,
+                    headers=headers,
+                    params={"series_ticker": series_ticker, "status": "open", "limit": 200},
+                )
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", 5))
+                    logger.debug("Kalshi rate limited on series=%s; sleeping %ds", series_ticker, retry_after)
+                    await asyncio.sleep(retry_after)
+                    return []
+                resp.raise_for_status()
+                return resp.json().get("markets", [])
+            except Exception as exc:
+                logger.debug("Kalshi series probe failed for %s: %s", series_ticker, exc)
+                return []
+
+    async def _refresh_active_series(self, client: httpx.AsyncClient) -> dict[str, list[dict]]:
+        """Probe every focused series for open markets.
+
+        This call itself carries live pricing, so its result is used
+        directly as this cycle's market data rather than being fetched
+        again — it's the expensive (~len(series_category) requests) sweep,
+        run at most every _ACTIVE_REFRESH_INTERVAL.
+        """
+        sem = asyncio.Semaphore(_PROBE_CONCURRENCY)
+        tickers = list(self._series_category.keys())
+        results = await asyncio.gather(*(self._probe_series(client, t, sem) for t in tickers))
+        by_series = {t: markets for t, markets in zip(tickers, results) if markets}
+        self._active_series = set(by_series.keys())
+        self._active_refreshed_at = self.utcnow()
+        logger.info(
+            "Kalshi active-series refresh: %d/%d focused series have open markets",
+            len(self._active_series), len(tickers),
+        )
+        return by_series
 
     # ------------------------------------------------------------------
     # REST fetch
@@ -90,49 +194,28 @@ class KalshiIngestor(BaseIngestor):
         now = self.utcnow()
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Fetch event → category map first
-            event_categories: dict[str, str] = {}
-            try:
-                evt_path = "/events"
-                evt_headers = _build_auth_headers("GET", "/trade-api/v2" + evt_path)
-                evt_resp = await client.get(
-                    config.KALSHI_BASE_URL + evt_path,
-                    headers=evt_headers,
-                    params={"status": "open", "limit": 200},
-                )
-                if evt_resp.status_code == 200:
-                    for evt in evt_resp.json().get("events", []):
-                        et = evt.get("event_ticker", "")
-                        cat = evt.get("category", "")
-                        if et and cat:
-                            event_categories[et] = cat
-            except Exception as exc:
-                logger.warning("Kalshi events fetch failed: %s", exc)
+            if self._series_refreshed_at is None or now - self._series_refreshed_at > _SERIES_REFRESH_INTERVAL:
+                await self._refresh_focused_series(client)
 
-            # Fetch markets page
-            try:
-                path = "/markets"
-                headers = _build_auth_headers("GET", "/trade-api/v2" + path)
-                resp = await client.get(
-                    config.KALSHI_BASE_URL + path,
-                    headers=headers,
-                    params={"status": "open", "limit": 200},
-                )
-                if resp.status_code == 429:
-                    retry_after = int(resp.headers.get("Retry-After", 60))
-                    logger.warning("Kalshi rate limited; retry after %ds", retry_after)
-                    await asyncio.sleep(retry_after)
-                    return raws
+            if not self._series_category:
+                logger.warning("Kalshi focused-series allowlist is empty; skipping poll cycle")
+                return raws
 
-                resp.raise_for_status()
-                data = resp.json()
-                markets = data.get("markets", [])
+            if self._active_refreshed_at is None or now - self._active_refreshed_at > _ACTIVE_REFRESH_INTERVAL:
+                by_series = await self._refresh_active_series(client)
+            else:
+                sem = asyncio.Semaphore(_PROBE_CONCURRENCY)
+                tickers = list(self._active_series)
+                results = await asyncio.gather(*(self._probe_series(client, t, sem) for t in tickers))
+                by_series = dict(zip(tickers, results))
+                # Markets close between polls — drop series with nothing open
+                # this cycle so the next fast poll doesn't keep probing them.
+                self._active_series = {t for t, markets in by_series.items() if markets}
 
+            for series_ticker, markets in by_series.items():
+                category = self._series_category.get(series_ticker, "")
                 for m in markets:
-                    ob = self._orderbook.get(m.get("ticker", ""), {})
-                    event_ticker = m.get("event_ticker", "")
-                    category = event_categories.get(event_ticker, "")
-                    raw = {**m, "orderbook": ob, "category": category}
+                    raw = {**m, "category": category}
                     raws.append(
                         RawRecord(
                             source=self.source,
@@ -141,10 +224,6 @@ class KalshiIngestor(BaseIngestor):
                             fetched_at=now,
                         )
                     )
-            except httpx.HTTPStatusError as exc:
-                logger.error("Kalshi REST error: %s", exc)
-            except Exception as exc:
-                logger.error("Kalshi fetch failed: %s", exc)
 
         return raws
 
@@ -211,45 +290,3 @@ class KalshiIngestor(BaseIngestor):
         ]
         return records
 
-    # ------------------------------------------------------------------
-    # WebSocket orderbook
-    # ------------------------------------------------------------------
-
-    async def _ws_connect(self) -> None:
-        """Maintain a persistent WebSocket connection for orderbook updates."""
-        try:
-            import websockets
-        except ImportError:
-            logger.warning("websockets not installed; skipping WebSocket connection")
-            return
-
-        from urllib.parse import urlparse
-        ws_path = urlparse(config.KALSHI_WS_URL).path
-
-        backoff = 1
-        while True:
-            try:
-                auth_headers = _build_auth_headers("GET", ws_path)
-                async with websockets.connect(config.KALSHI_WS_URL, additional_headers=auth_headers) as ws:
-                    logger.info("Kalshi WebSocket connected")
-                    backoff = 1
-                    # Subscribe to orderbook deltas
-                    sub_msg = json.dumps({"id": 1, "cmd": "subscribe", "params": {"channels": ["orderbook_delta"]}})
-                    await ws.send(sub_msg)
-                    async for msg in ws:
-                        try:
-                            data = json.loads(msg)
-                            ticker = data.get("market_ticker") or data.get("ticker")
-                            if ticker:
-                                self._orderbook[ticker] = data
-                        except Exception:
-                            pass
-            except Exception as exc:
-                logger.warning("Kalshi WebSocket error: %s; reconnecting in %ds", exc, backoff)
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, 60)
-
-    def start_websocket(self) -> None:
-        """Schedule the WebSocket coroutine as a background task."""
-        loop = asyncio.get_event_loop()
-        self._ws_task = loop.create_task(self._ws_connect(), name="kalshi-ws")

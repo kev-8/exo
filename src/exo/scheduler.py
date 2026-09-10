@@ -184,7 +184,6 @@ class ExoScheduler:
     async def start(self) -> None:
         self.setup_jobs()
         await self.bus.start()
-        self.kalshi.start_websocket()
         self._scheduler.start()
         logger.info("ExoScheduler started")
 

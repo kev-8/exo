@@ -75,6 +75,7 @@ class KalshiMarket:
     close_time: datetime | None
     resolved_yes: bool | None = None
     fetched_at: datetime = field(default_factory=datetime.utcnow)
+    event_ticker: str = ""
 
 
 # ---------------------------------------------------------------------------

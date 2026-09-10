@@ -27,6 +27,21 @@ KALSHI_WS_URL: str = os.getenv(
     "KALSHI_WS_URL", "wss://api.elections.kalshi.com/trade-api/ws/v2"
 )
 
+# Market categories the downstream analysis (exo-pm) actually scores.
+# The Kalshi ingestor uses this to scope live polling to relevant series —
+# without it, high-frequency synthetic/sports markets (thousands of new
+# tickers per day) drown out the slower-moving contracts these categories
+# care about. Single source of truth: downstream consumers should import
+# this rather than redefining their own copy.
+FOCUSED_CATEGORIES: set[str] = {
+    "World",
+    "Economics",
+    "Financials",
+    "Politics",
+    "Elections",
+    "Science and Technology",
+}
+
 FRED_API_KEY: str = os.getenv("FRED_API_KEY", "")
 FINNHUB_API_KEY: str = os.getenv("FINNHUB_API_KEY", "")
 
