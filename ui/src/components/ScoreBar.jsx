@@ -8,8 +8,7 @@ export default function ScoreBar({ label, score, delay = 0, showValue = true, la
   return (
     <div className="flex items-center gap-3 w-full">
       <span
-        className={`font-display text-slate-400 shrink-0 ${large ? 'text-sm' : 'text-xs'}`}
-        style={{ minWidth: '10rem' }}
+        className={`font-display text-slate-400 shrink-0 min-w-[6rem] sm:min-w-[8rem] md:min-w-[10rem] ${large ? 'text-sm' : 'text-xs'}`}
       >{label}</span>
       <div className="h-[4px] bg-white/5 rounded-full overflow-hidden flex-1">
         <motion.div

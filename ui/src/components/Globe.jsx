@@ -20,6 +20,23 @@ const WORLD_COORDS = {
   CI: [7.5, -5.5],    CM: [3.9, 11.5],    UG: [1.4, 32.3],    SD: [12.9, 30.2],
 }
 
+// globe.gl's default camera vertical FOV. Horizontal FOV is derived from it by
+// aspect ratio, so a narrow portrait viewport sees far less horizontally than a
+// landscape one — at a fixed altitude the globe gets cropped left/right on
+// phones. fitAltitude() solves for the altitude that keeps the whole globe in
+// frame (whichever axis is tighter) with breathing room around it.
+const FOV_VERTICAL_DEG = 50
+const GLOBE_FILL       = 0.7   // fraction of the tighter half-FOV the globe fills
+
+function fitAltitude(width, height) {
+  const aspect  = (width || 1) / (height || 1)
+  const halfV   = (FOV_VERTICAL_DEG / 2) * (Math.PI / 180)
+  const halfH   = Math.atan(Math.tan(halfV) * aspect)
+  const halfMin = Math.min(halfV, halfH)
+  // Camera distance d = R*(1+altitude); globe spans the view when R/d = sin(halfAngle).
+  return Math.max(0.5, 1 / (GLOBE_FILL * Math.sin(halfMin)) - 1)
+}
+
 const CONE_HEIGHT    = 5.5
 const CONE_HALF_H    = CONE_HEIGHT / 2       // 2.75
 const GLOBE_RADIUS   = 100                   // globe.gl default radius
@@ -89,9 +106,11 @@ const Globe = forwardRef(function Globe({
   const pollRef           = useRef(null)
   const activeRef         = useRef(null)
   const onCountryClickRef = useRef(onCountryClick)
+  const selectedIso2Ref   = useRef(selectedIso2)
   const [GlobeGL, setGlobeGL] = useState(null)
 
   useEffect(() => { onCountryClickRef.current = onCountryClick }, [onCountryClick])
+  useEffect(() => { selectedIso2Ref.current = selectedIso2 }, [selectedIso2])
   useEffect(() => { import('globe.gl').then(m => setGlobeGL(() => m.default)) }, [])
 
   const buildArcs = useCallback((iso2) => {
@@ -215,18 +234,35 @@ const Globe = forwardRef(function Globe({
       .then(data => { if (globeRef.current) globeRef.current.polygonsData(data.features) })
       .catch(() => {})
 
+    // Pinch-zoom/pan are only enabled for touch devices — desktop keeps
+    // drag-to-rotate-only behavior unchanged.
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+
     globe.renderer().setPixelRatio(window.devicePixelRatio)
     globe.controls().autoRotate      = true
     globe.controls().autoRotateSpeed = 0.35
-    globe.controls().enableZoom      = false
-    globe.controls().enablePan       = false
+    globe.controls().enableZoom      = isTouchDevice
+    globe.controls().enablePan       = isTouchDevice
     globe.controls().minPolarAngle   = Math.PI * 0.2
     globe.controls().maxPolarAngle   = Math.PI * 0.8
 
-    const resize = () => globe.width(el.clientWidth).height(el.clientHeight)
-    window.addEventListener('resize', resize)
+    // Frame the whole globe on first paint, sized to this viewport's aspect.
+    globe.pointOfView({ lat: 0, lng: 0, altitude: fitAltitude(el.clientWidth, el.clientHeight) })
+
+    // ResizeObserver (not just window 'resize') so the canvas re-sizes on
+    // orientation change and container-driven layout reflows too, not just
+    // top-level window resizes. Re-fit the camera too, unless the user has
+    // zoomed in themselves or we're focused on a selected country.
+    const resize = () => {
+      globe.width(el.clientWidth).height(el.clientHeight)
+      if (selectedIso2Ref.current) return
+      const { lat, lng } = globe.pointOfView()
+      globe.pointOfView({ lat, lng, altitude: fitAltitude(el.clientWidth, el.clientHeight) })
+    }
+    const resizeObserver = new ResizeObserver(resize)
+    resizeObserver.observe(el)
     return () => {
-      window.removeEventListener('resize', resize)
+      resizeObserver.disconnect()
       globe._destructor?.()
       globeRef.current = null
     }
@@ -281,7 +317,11 @@ const Globe = forwardRef(function Globe({
     if (!c) return
     clearInterval(pollRef.current)
     globe.controls().autoRotate = false
-    globe.pointOfView({ lat: c.lat, lng: c.lon, altitude: 1.7 }, 1200)
+    // Closer than the resting framing, but still aspect-aware so a portrait
+    // phone doesn't end up cropped into the globe.
+    const el = mountRef.current
+    const focusAltitude = fitAltitude(el?.clientWidth, el?.clientHeight) * 0.72
+    globe.pointOfView({ lat: c.lat, lng: c.lon, altitude: focusAltitude }, 1200)
     setTimeout(() => {
       const arcs = buildArcs(selectedIso2)
       refreshPins(selectedIso2)

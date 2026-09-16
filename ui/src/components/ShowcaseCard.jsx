@@ -6,6 +6,20 @@ import { SHOWCASE } from '../data/showcaseData'
 const CARD_WIDTH_PX = 384  // 24rem at 16px base
 const SIDE_OFFSET_PX = 40  // 2.5rem at 16px base
 
+// Keep-out bands so a card (vertically centered on its anchor, ~280px tall)
+// never collides with the header up top or the country selector at the bottom.
+const TOP_SAFE_PX    = 200
+const BOTTOM_SAFE_PX = 200
+
+// Card's vertical centre for a given viewport height, clamped out of both bands.
+// Used for the CSS `top` and the SVG connector-line maths so they stay in sync.
+function cardCenterY(viewportH, topPct) {
+  const raw = topPct * viewportH
+  const min = TOP_SAFE_PX
+  const max = Math.max(min, viewportH - BOTTOM_SAFE_PX)
+  return Math.min(Math.max(raw, min), max)
+}
+
 // Updates SVG path and circle imperatively on every animation frame —
 // no React state so the line tracks the globe dot at 60fps with zero re-renders.
 function useGlobeLine(showcaseIso2, entry, country, globeApiRef, pathRef, circleRef) {
@@ -22,15 +36,15 @@ function useGlobeLine(showcaseIso2, entry, country, globeApiRef, pathRef, circle
       if (screenPos && pathRef.current && circleRef.current) {
         const W = window.innerWidth
         const H = window.innerHeight
-        const cardCenterY = H * entry.position.topPct
+        const centerY = cardCenterY(H, entry.position.topPct)
         const cardX = entry.position.side === 'right'
           ? W - SIDE_OFFSET_PX - CARD_WIDTH_PX
           : SIDE_OFFSET_PX + CARD_WIDTH_PX
         const { x: cX, y: cY } = screenPos
         const mx = (cardX + cX) / 2
         pathRef.current.setAttribute('d',
-        // `M ${cardX} ${cardCenterY} L ${mx} ${cardCenterY} L ${mx} ${cY} L ${cX} ${cY}`)                          
-        `M ${cardX} ${cardCenterY} L ${mx} ${cY} L ${cX} ${cY}`)
+        // `M ${cardX} ${centerY} L ${mx} ${centerY} L ${mx} ${cY} L ${cX} ${cY}`)
+        `M ${cardX} ${centerY} L ${mx} ${cY} L ${cX} ${cY}`)
         pathRef.current.style.opacity   = '1'
         circleRef.current.setAttribute('cx', cX)
         circleRef.current.setAttribute('cy', cY)
@@ -89,7 +103,8 @@ export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeD
 
   const wrapStyle = pos ? {
     [pos.side]: '2.5rem',
-    top: `${pos.topPct * 100}vh`,
+    // Mirrors cardCenterY() — keeps the card clear of the header and selector.
+    top: `clamp(${TOP_SAFE_PX}px, ${pos.topPct * 100}vh, calc(100dvh - ${BOTTOM_SAFE_PX}px))`,
     width: '24rem',
     zIndex: 10,
   } : {}

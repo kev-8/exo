@@ -37,7 +37,7 @@ export default function RiskCard({ snapshot, country, onClose }) {
         }}
       >
         <div style={{ padding: '1.0rem' }}>
-          <div className="grid gap-10" style={{ gridTemplateColumns: '2fr 3fr' }}>
+          <div className="grid gap-6 md:gap-10 grid-cols-1 md:grid-cols-[2fr_3fr]">
             {/* ── Left column: identity + composite + tiers ── */}
             <div className="flex flex-col justify-between">
               {/* Header */}
@@ -58,7 +58,7 @@ export default function RiskCard({ snapshot, country, onClose }) {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-mono text-4xl font-medium" style={{ color: compositeColor }}>
+                  <div className="font-mono text-3xl md:text-4xl font-medium" style={{ color: compositeColor }}>
                     {composite_score.toFixed(2)}
                   </div>
                   <div className="font-display text-sm tracking-[0.15em] mt-1" style={{ color: compositeColor }}>

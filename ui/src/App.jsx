@@ -7,6 +7,7 @@ import SignalFeed from './components/SignalFeed'
 import CountrySelector from './components/CountrySelector'
 import ShowcaseCard from './components/ShowcaseCard'
 import { api } from './lib/api'
+import { useIsMobile } from './hooks/useIsMobile'
 
 const SHOWCASE_COUNTRIES = ['TW', 'RU', 'IR', 'KE', 'FR', 'NG', 'BR', 'US']
 
@@ -24,6 +25,10 @@ export default function App() {
   const menuOpenRef = useRef(false)
   const globeApiRef = useRef(null)
   const [error,           setError]           = useState(null)
+  const isMobile = useIsMobile()
+  // On phones the detail cards fill the screen, and the header/selector (z-30)
+  // would otherwise paint on top of them. Give the cards the screen instead.
+  const hideChrome = isMobile && !!selected
 
   // Countries list
   useEffect(() => {
@@ -95,9 +100,10 @@ export default function App() {
         />
       </div>
 
-      {/* Showcase card — appears during auto-rotation */}
+      {/* Showcase card — appears during auto-rotation (desktop/tablet only; fixed
+          384px card + per-frame connector-line math don't fit phone widths) */}
       <AnimatePresence>
-        {!selected && (
+        {!selected && !isMobile && (
           <ShowcaseCard
             showcaseIso2={showcaseIso2}
             countries={countries}
@@ -111,10 +117,10 @@ export default function App() {
       {/* ── Header ── */}
       <motion.div
         initial={{ opacity: 0, y: -16 }}
-        animate={{ opacity: 1, y: 0 }}
+        animate={{ opacity: hideChrome ? 0 : 1, y: 0 }}
         transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-        className="absolute top-0 left-0 right-0 flex items-start justify-between pointer-events-none"
-        style={{ padding: '2rem 3rem', zIndex: 30 }}
+        className="absolute top-0 left-0 right-0 flex items-start justify-between pointer-events-none px-5 py-6 md:px-12 md:py-8"
+        style={{ zIndex: 30 }}
       >
         {/* Logo */}
         <div>
@@ -137,10 +143,16 @@ export default function App() {
       {/* ── Country selector — bottom-left ── */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
+        animate={{ opacity: hideChrome ? 0 : 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
         className="absolute"
-        style={{ bottom: '2.5rem', left: '3rem', width: '22rem', zIndex: 30 }}
+        style={{
+          bottom: 'clamp(1.25rem, 4vh, 2.5rem)',
+          left: 'clamp(1.25rem, 4vw, 3rem)',
+          width: 'min(22rem, calc(100vw - 2.5rem))',
+          zIndex: 30,
+          pointerEvents: hideChrome ? 'none' : 'auto',
+        }}
       >
         <CountrySelector
           countries={countries}
@@ -169,15 +181,31 @@ export default function App() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.97 }}
               transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-              className="grid gap-5 w-full pointer-events-auto relative"
+              className="grid gap-5 w-full pointer-events-auto relative grid-cols-1 md:grid-cols-2 px-4 md:px-10 py-6 md:py-0"
               style={{
-                gridTemplateColumns: '1fr 1fr',
                 maxWidth: '1120px',
-                padding: '0 2.5rem',
+                maxHeight: '100dvh',
+                overflowY: 'auto',
                 zIndex: 1,
               }}
               onClick={e => e.stopPropagation()}
             >
+              {/* Back to globe — explicit dismiss, since tapping outside the
+                  cards is unreliable on phones where they fill the screen */}
+              <div style={{ gridColumn: '1 / -1' }} className="flex justify-end">
+                <button
+                  onClick={handleDeselect}
+                  className="font-display text-[11px] tracking-[0.2em] uppercase rounded px-3 py-2 border-white flex items-center gap-2"
+                  style={{
+                    background: 'rgba(10,10,10,0.75)',
+                    border: '1.5px solid #ffffff',
+                    color: '#00E676',
+                  }}
+                >
+                  <span aria-hidden="true">←</span> Back to globe
+                </button>
+              </div>
+
               {/* Risk card — spans full width */}
               <div style={{ gridColumn: '1 / -1' }}>
                 {riskLoading || !snapshot ? (
@@ -240,7 +268,7 @@ export default function App() {
         {error && (
           <motion.div
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="absolute top-24 left-1/2 -translate-x-1/2 font-mono text-xs px-4 py-2 rounded"
+            className="absolute top-24 left-1/2 -translate-x-1/2 font-mono text-xs px-4 py-2 rounded max-w-[calc(100vw-2rem)] text-center"
             style={{ background: 'rgba(255,59,92,0.12)', border: '1px solid rgba(255,59,92,0.3)', color: '#ff3b5c' }}
           >
             API unavailable — {error}
