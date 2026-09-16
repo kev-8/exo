@@ -40,6 +40,14 @@ async def lifespan(app: FastAPI):
         logger.critical("SIGTERM received — process about to exit")
     signal.signal(signal.SIGTERM, _on_sigterm)
 
+    # Serve-only mode: skip ingestion entirely. Used when something else owns
+    # ingestion for this DATA_DIR — a local campaign run, or a deployment that
+    # only needs to serve the UI and shouldn't be filling its volume.
+    if os.getenv("EXO_DISABLE_SCHEDULER", "").lower() in ("1", "true", "yes"):
+        logger.info("EXO_DISABLE_SCHEDULER set — running API in serve-only mode")
+        yield
+        return
+
     from exo.scheduler import ExoScheduler
     scheduler = ExoScheduler()
     await scheduler.start()
