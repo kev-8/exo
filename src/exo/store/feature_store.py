@@ -361,7 +361,21 @@ class FeatureStore:
         return self._filter_df(df, query)
 
     def _filter_df(self, df: pd.DataFrame, query: FeatureQuery) -> list[FeatureRecord]:
-        """Apply *query*'s filters to an already-loaded frame."""
+        """Apply *query*'s filters to an already-loaded frame.
+
+        Equality filters run first, before the timestamp parsing and the
+        defensive copy: parsing two datetime columns across a multi-million
+        row frame only to keep a handful of rows dominated read cost. Boolean
+        indexing returns new frames, so the caller's (possibly cached) frame
+        is never mutated.
+        """
+        if query.entity:
+            df = df[df["entity"] == query.entity]
+        if query.signal_type:
+            df = df[df["signal_type"] == query.signal_type]
+        if query.ticker:
+            df = df[df["ticker"] == query.ticker]
+
         df = df.copy()
         df["as_of_ts"] = pd.to_datetime(df["as_of_ts"], format="ISO8601", utc=True)
         df["ingested_at"] = pd.to_datetime(df["ingested_at"], format="ISO8601", utc=True)
