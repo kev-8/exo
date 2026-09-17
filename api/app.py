@@ -57,8 +57,12 @@ async def lifespan(app: FastAPI):
         yield
         return
 
+    # Kalshi is never read by this API or the risk index — it exists purely
+    # for the separate exo-pm project, which ingests it locally. Running it
+    # here just fills the volume with files nothing here uses (it's what
+    # exhausted the volume's inodes and crashed this deployment previously).
     from exo.scheduler import ExoScheduler
-    scheduler = ExoScheduler()
+    scheduler = ExoScheduler(exclude_jobs={"kalshi_rest"})
     await scheduler.start()
     logger.info("exo scheduler started")
     yield

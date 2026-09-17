@@ -40,10 +40,11 @@ class ExoScheduler:
         Shared feature store instance.
     """
 
-    def __init__(self, store: FeatureStore | None = None) -> None:
+    def __init__(self, store: FeatureStore | None = None, exclude_jobs: set[str] = frozenset()) -> None:
         self.store = store or FeatureStore()
         self.bus = get_bus()
         self._scheduler = AsyncIOScheduler()
+        self._exclude_jobs = exclude_jobs
 
         _kwargs = {"store": self.store, "bus": self.bus}
         self.gdelt = GDELTIngestor(**_kwargs)
@@ -67,6 +68,10 @@ class ExoScheduler:
     # ------------------------------------------------------------------
 
     def _add_ingestor_job(self, ingestor, job_id: str, **trigger_kwargs) -> None:
+        if job_id in self._exclude_jobs:
+            logger.info("Skipping job %s (excluded)", job_id)
+            return
+
         async def _run():
             try:
                 await ingestor.run()
