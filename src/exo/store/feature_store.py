@@ -384,12 +384,6 @@ class FeatureStore:
             cutoff = pd.Timestamp(query.as_of_ts, tz="UTC") if query.as_of_ts.tzinfo is None else pd.Timestamp(query.as_of_ts)
             df = df[df["as_of_ts"] <= cutoff]
 
-        if query.entity:
-            df = df[df["entity"] == query.entity]
-        if query.signal_type:
-            df = df[df["signal_type"] == query.signal_type]
-        if query.ticker:
-            df = df[df["ticker"] == query.ticker]
         if query.start_ts:
             start = pd.Timestamp(query.start_ts, tz="UTC") if query.start_ts.tzinfo is None else pd.Timestamp(query.start_ts)
             df = df[df["as_of_ts"] >= start]
