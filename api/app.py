@@ -18,7 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import admin, countries, risk, signals, trade
+from api.routes import countries, risk, signals, trade
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +36,17 @@ async def lifespan(app: FastAPI):
     loop.set_exception_handler(_asyncio_exception_handler)
 
     # Log on SIGTERM so Railway crash logs include a final message before SIGKILL.
-    def _on_sigterm(*_):
-        logger.critical("SIGTERM received — process about to exit")
+    # Chain to uvicorn's handler (installed before lifespan runs) rather than
+    # replacing it: a handler that only logs swallows the signal entirely, so the
+    # process never shuts down gracefully — it just waits out the grace period
+    # and gets SIGKILLed, skipping scheduler.stop() and any in-flight writes.
+    _prev_sigterm = signal.getsignal(signal.SIGTERM)
+
+    def _on_sigterm(signum, frame):
+        logger.critical("SIGTERM received — shutting down")
+        if callable(_prev_sigterm):
+            _prev_sigterm(signum, frame)
+
     signal.signal(signal.SIGTERM, _on_sigterm)
 
     # Serve-only mode: skip ingestion entirely. Used when something else owns
@@ -89,7 +98,6 @@ app.include_router(countries.router, prefix="/api")
 app.include_router(risk.router,      prefix="/api")
 app.include_router(trade.router,     prefix="/api")
 app.include_router(signals.router,   prefix="/api")
-app.include_router(admin.router,     prefix="/api")   # temporary — remove after volume cleanup
 
 
 @app.get("/api/health")
