@@ -257,6 +257,18 @@ class KalshiIngestor(BaseIngestor):
         legacy = m.get(side)
         return float(legacy or 0) / 100
 
+    @staticmethod
+    def _num(m: dict, *keys: str) -> float:
+        """First present key parsed as float (Kalshi returns these as strings)."""
+        for k in keys:
+            v = m.get(k)
+            if v is not None:
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    continue
+        return 0.0
+
     def normalise(self, raw: RawRecord) -> list[FeatureRecord]:
         m = raw.raw
         ticker = m.get("ticker", raw.entity)
@@ -270,6 +282,16 @@ class KalshiIngestor(BaseIngestor):
         # the opportunity filter's liquidity intent (is this market traded
         # *now*), where lifetime `volume_fp` would let a dormant market pass.
         volume = float(m.get("volume_24h_fp") or m.get("volume") or 0)
+
+        # Captured for market-quality filtering
+        # rejects exactly the markets that are responding to information.
+        #   volume_lifetime — has this contract *ever* drawn real participation
+        #   yes_bid_size / yes_ask_size — resting size at top of book, i.e. how
+        #   much can be filled before the quote moves
+        volume_lifetime = self._num(m, "volume_fp", "volume")
+        yes_bid_size = self._num(m, "yes_bid_size_fp")
+        yes_ask_size = self._num(m, "yes_ask_size_fp")
+
         spread = round(yes_ask - yes_bid, 4)
         mid = round((yes_ask + yes_bid) / 2, 4) if yes_ask and yes_bid else yes_ask
 
@@ -298,6 +320,9 @@ class KalshiIngestor(BaseIngestor):
                     "close_time": close_str,
                     "category": m.get("category", ""),
                     "event_ticker": m.get("event_ticker", ""),
+                    # Top-of-book depth, alongside the prices it applies to.
+                    "yes_bid_size": yes_bid_size,
+                    "yes_ask_size": yes_ask_size,
                 },
                 ticker=ticker,
                 as_of_ts=now,
@@ -307,7 +332,10 @@ class KalshiIngestor(BaseIngestor):
                 entity=ticker,
                 signal_type="market_volume",
                 value=volume,
-                metadata={"open_interest": float(m.get("open_interest_fp") or m.get("open_interest") or 0)},
+                metadata={
+                    "open_interest": self._num(m, "open_interest_fp", "open_interest"),
+                    "volume_lifetime": volume_lifetime,
+                },
                 ticker=ticker,
                 as_of_ts=now,
             ),
