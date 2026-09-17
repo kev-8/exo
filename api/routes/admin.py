@@ -10,16 +10,19 @@ routes refuse to run at all, so they're inert unless deliberately enabled.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
 import secrets
 import shutil
-from datetime import date
+import threading
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 
 from exo import config
+from exo.store.compaction import compact_all
 
 logger = logging.getLogger(__name__)
 
@@ -156,3 +159,81 @@ def purge(
         "files_removed": removed_files,
         "bytes_removed": removed_bytes,
     }
+
+
+# ---------------------------------------------------------------------------
+# Compaction
+# ---------------------------------------------------------------------------
+
+# Compaction is slow and CPU-bound, and the app runs with --workers 1, so it
+# must never run on the event loop: a multi-minute block would stall the
+# healthcheck and get the container killed. Real runs go to a worker thread
+# and are polled via /admin/compact/status.
+_job: dict = {"state": "idle"}
+_job_lock = threading.Lock()
+
+
+def _run_compaction(source: str | None) -> None:
+    try:
+        result = compact_all(config.FEATURES_DIR, source=source, dry_run=False)
+        with _job_lock:
+            _job.update(
+                state="done",
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                result=result,
+            )
+        logger.warning(
+            "admin compaction finished: removed %d files (%d bytes)",
+            result["files_removed"], result["bytes_removed"],
+        )
+    except Exception as exc:                      # noqa: BLE001 — surfaced via status
+        logger.exception("admin compaction failed")
+        with _job_lock:
+            _job.update(
+                state="failed",
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                error=str(exc),
+            )
+
+
+@router.post("/admin/compact")
+async def compact(
+    source: str | None = Query(default=None),
+    token: str = Query(default=None),
+    dry_run: bool = Query(default=True),
+):
+    """Merge legacy per-record parquet files into one file per partition.
+
+    dry_run (the default) reports what would be merged and returns inline.
+    A real run is dispatched to a worker thread; poll /admin/compact/status.
+    """
+    _require_token(token)
+    if source is not None:
+        _source_dir(source)                      # validates the name
+
+    if dry_run:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, lambda: compact_all(config.FEATURES_DIR, source=source, dry_run=True)
+        )
+        return result
+
+    with _job_lock:
+        if _job.get("state") == "running":
+            raise HTTPException(409, "a compaction is already running")
+        _job.clear()
+        _job.update(
+            state="running",
+            source=source or "*",
+            started_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    threading.Thread(target=_run_compaction, args=(source,), daemon=True).start()
+    return {"state": "running", "source": source or "*", "poll": "/api/admin/compact/status"}
+
+
+@router.get("/admin/compact/status")
+def compact_status(token: str = Query(default=None)):
+    _require_token(token)
+    with _job_lock:
+        return dict(_job)
