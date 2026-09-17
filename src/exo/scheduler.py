@@ -45,6 +45,10 @@ class ExoScheduler:
         self.bus = get_bus()
         self._scheduler = AsyncIOScheduler()
         self._exclude_jobs = exclude_jobs
+        # Populated as jobs are skipped in _add_ingestor_job — a source this
+        # deployment never ingests will never have fresh data, so alerting on
+        # it forever is just noise, not a signal.
+        self._excluded_sources: set[str] = set()
 
         _kwargs = {"store": self.store, "bus": self.bus}
         self.gdelt = GDELTIngestor(**_kwargs)
@@ -69,6 +73,7 @@ class ExoScheduler:
 
     def _add_ingestor_job(self, ingestor, job_id: str, **trigger_kwargs) -> None:
         if job_id in self._exclude_jobs:
+            self._excluded_sources.add(ingestor.source)
             logger.info("Skipping job %s (excluded)", job_id)
             return
 
@@ -163,7 +168,11 @@ class ExoScheduler:
 
     async def _staleness_check(self) -> None:
         loop = asyncio.get_event_loop()
-        items = list(config.STALENESS_THRESHOLDS.items())
+        items = [
+            (source, threshold_sec)
+            for source, threshold_sec in config.STALENESS_THRESHOLDS.items()
+            if source not in self._excluded_sources
+        ]
 
         # Run filesystem checks sequentially — concurrent NFS stat() calls can
         # trigger kernel-level uninterruptible sleep (D-state) on Railway volumes.
