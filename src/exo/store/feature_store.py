@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -39,8 +39,17 @@ except ImportError:
     pass
 
 
+# Distinguishes "caller omitted redis_url" from an explicit None (= disable).
+_REDIS_DEFAULT = "__redis_default__"
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _as_utc(ts: datetime) -> datetime:
+    """Treat a naive datetime as UTC; convert an aware one to UTC."""
+    return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts.astimezone(timezone.utc)
 
 
 class FeatureStore:
@@ -51,7 +60,8 @@ class FeatureStore:
     data_dir:
         Root path for Parquet partitions (default: ``config.FEATURES_DIR``).
     redis_url:
-        Redis connection string.  Pass ``None`` to disable caching.
+        Redis connection string.  Omit for ``config.REDIS_URL``; pass an
+        explicit ``None`` to disable caching.
     backtest_mode:
         When ``True``, every read must supply ``as_of_ts`` or a
         :class:`ValueError` is raised.
@@ -60,22 +70,29 @@ class FeatureStore:
     def __init__(
         self,
         data_dir: Path | str | None = None,
-        redis_url: str | None = None,
+        redis_url: str | None = _REDIS_DEFAULT,  # type: ignore[assignment]
         backtest_mode: bool = False,
     ) -> None:
         self.data_dir = Path(data_dir or config.FEATURES_DIR)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.backtest_mode = backtest_mode
 
-        # Redis
+        # A sentinel default distinguishes "not specified" from an explicit
+        # None: callers that pass redis_url=None (backtests, differential
+        # tests) mean *disable the cache*, and the old `redis_url or
+        # config.REDIS_URL` silently connected anyway — serving cached rows
+        # where the caller expected reads to come straight from parquet.
+        if redis_url is _REDIS_DEFAULT:
+            redis_url = config.REDIS_URL
+
         self._redis: Optional["redis.Redis"] = None  # type: ignore[name-defined]
-        if _REDIS_AVAILABLE and (redis_url or config.REDIS_URL):
+        if _REDIS_AVAILABLE and redis_url:
             try:
                 import redis as _redis
 
-                self._redis = _redis.from_url(redis_url or config.REDIS_URL, decode_responses=True)
+                self._redis = _redis.from_url(redis_url, decode_responses=True)
                 self._redis.ping()
-                logger.info("Redis cache connected: %s", redis_url or config.REDIS_URL)
+                logger.info("Redis cache connected: %s", redis_url)
             except Exception as exc:
                 logger.warning("Redis unavailable (%s); continuing without cache", exc)
                 self._redis = None
@@ -238,16 +255,59 @@ class FeatureStore:
                         pass
         return False
 
-    def _parquet_files(self, source: str | None = None) -> list[str]:
+    # A partition's directory name comes from the record's own as_of_ts
+    # (see write/write_batch), so date=YYYY-MM-DD is an exact, if coarse,
+    # index over as_of_ts — every record in date=D has as_of_ts on day D.
+    # Pruning partitions by a query's time bounds therefore cannot drop a
+    # matching row. One day of slack on each side absorbs any tz/rounding
+    # skew from older records written with naive datetimes.
+    _PARTITION_SLACK = timedelta(days=1)
+
+    def _partition_dirs(
+        self,
+        source: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> list[tuple[date, Path]]:
+        """Return (date, path) for matching partitions, newest first."""
         src_part = f"source={source}" if source else "source=*"
+        lo = (start_date - self._PARTITION_SLACK) if start_date else None
+        hi = (end_date + self._PARTITION_SLACK) if end_date else None
+
+        out: list[tuple[date, Path]] = []
+        for p in self.data_dir.glob(f"{src_part}/date=*"):
+            if not p.is_dir():
+                continue
+            try:
+                d = datetime.strptime(p.name.removeprefix("date="), "%Y-%m-%d").date()
+            except ValueError:
+                # Unparseable partition name — keep it rather than risk
+                # silently dropping data we can't place in time.
+                out.append((date.min, p))
+                continue
+            if (lo and d < lo) or (hi and d > hi):
+                continue
+            out.append((d, p))
+        return sorted(out, key=lambda t: t[0], reverse=True)
+
+    @staticmethod
+    def _files_in(partitions: list[tuple[date, Path]]) -> list[str]:
         return [
-            str(p)
-            for p in self.data_dir.glob(f"{src_part}/date=*/*.parquet")
-            if not p.name.startswith("._")
+            str(f)
+            for _, p in partitions
+            for f in p.glob("*.parquet")
+            if not f.name.startswith("._")
         ]
 
-    def _load_df(self, source: str | None = None) -> pd.DataFrame | None:
-        files = self._parquet_files(source)
+    def _parquet_files(
+        self,
+        source: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> list[str]:
+        return self._files_in(self._partition_dirs(source, start_date, end_date))
+
+    def _read_files(self, files: list[str]) -> pd.DataFrame | None:
         if not files:
             return None
         _db = duckdb.connect(":memory:")
@@ -262,15 +322,47 @@ class FeatureStore:
         finally:
             _db.close()
 
+    def _load_df(
+        self,
+        source: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> pd.DataFrame | None:
+        return self._read_files(self._parquet_files(source, start_date, end_date))
+
+    @staticmethod
+    def _query_date_bounds(query: FeatureQuery) -> tuple[date | None, date | None]:
+        """Tightest (start_date, end_date) implied by *query*'s time filters."""
+        lower: datetime | None = None
+        upper: datetime | None = None
+
+        if query.start_ts is not None:
+            lower = _as_utc(query.start_ts)
+        if query.max_age_sec is not None:
+            age_floor = _utcnow() - timedelta(seconds=query.max_age_sec)
+            lower = max(lower, age_floor) if lower else age_floor
+
+        for ts in (query.as_of_ts, query.end_ts):
+            if ts is not None:
+                u = _as_utc(ts)
+                upper = min(upper, u) if upper else u
+
+        return (lower.date() if lower else None, upper.date() if upper else None)
+
     def read(self, query: FeatureQuery) -> list[FeatureRecord]:
         """Return records matching *query*, honoring point-in-time semantics."""
         if self.backtest_mode and query.as_of_ts is None:
             raise ValueError("Backtest mode requires as_of_ts on every read")
 
-        df = self._load_df(query.source)
+        start_date, end_date = self._query_date_bounds(query)
+        df = self._load_df(query.source, start_date=start_date, end_date=end_date)
         if df is None:
             return []
+        return self._filter_df(df, query)
 
+    def _filter_df(self, df: pd.DataFrame, query: FeatureQuery) -> list[FeatureRecord]:
+        """Apply *query*'s filters to an already-loaded frame."""
+        df = df.copy()
         df["as_of_ts"] = pd.to_datetime(df["as_of_ts"], format="ISO8601", utc=True)
         df["ingested_at"] = pd.to_datetime(df["ingested_at"], format="ISO8601", utc=True)
 
@@ -321,17 +413,36 @@ class FeatureStore:
                 if age <= max_age_sec:
                     return cached
 
-        results = self.read(
-            FeatureQuery(
-                entity=entity,
-                signal_type=signal_type,
-                source=source,
-                as_of_ts=as_of_ts,
-                max_age_sec=max_age_sec,
-                limit=1,
-            )
+        query = FeatureQuery(
+            entity=entity,
+            signal_type=signal_type,
+            source=source,
+            as_of_ts=as_of_ts,
+            max_age_sec=max_age_sec,
+            limit=1,
         )
-        return results[0] if results else None
+        start_date, end_date = self._query_date_bounds(query)
+        partitions = self._partition_dirs(source, start_date, end_date)
+
+        # Partitions are date-ordered and a record's partition is its own
+        # as_of_ts day, so the newest partition holding a match holds *the*
+        # latest match — walk newest-first and stop there instead of
+        # loading the source's entire history. Widening batches keep the
+        # common case (recent data) to a single small read while still
+        # reaching back cheaply when a signal has gone quiet.
+        idx = 0
+        for size in (1, 3, 10, 30, None):
+            if idx >= len(partitions):
+                break
+            batch = partitions[idx:] if size is None else partitions[idx: idx + size]
+            idx += len(batch)
+            df = self._read_files(self._files_in(batch))
+            if df is None:
+                continue
+            results = self._filter_df(df, query)
+            if results:
+                return results[0]
+        return None
 
     def get_for_ticker(
         self, ticker: str, as_of_ts: datetime | None = None

@@ -15,6 +15,11 @@ from exo.models import FeatureRecord, RawRecord
 
 logger = logging.getLogger(__name__)
 
+# GDELT throttles at one request per 5 seconds ("Please limit requests to one
+# every 5 seconds", HTTP 429). Keep a margin above the documented floor; 
+# 20 countries * 7s is ~140s per cycle, comfortable inside the 15-minute schedule.
+_REQUEST_INTERVAL_SEC = 7.0
+
 _GDELT_AVAILABLE = False
 try:
     from gdeltdoc import GdeltDoc, Filters
@@ -22,6 +27,26 @@ try:
     _GDELT_AVAILABLE = True
 except ImportError:
     logger.warning("gdeltdoc not installed; GDELTIngestor will return no data")
+
+
+def _describe(exc: BaseException) -> str:
+    """Render an exception usefully even when it carries no message.
+        Always surface the type, and the HTTP status/body
+        when the exception carries a response.
+    """
+    parts = [type(exc).__name__]
+    text = str(exc).strip()
+    if text:
+        parts.append(text)
+    response = getattr(exc, "response", None)
+    if response is not None:
+        status = getattr(response, "status_code", None)
+        if status is not None:
+            parts.append(f"HTTP {status}")
+        body = (getattr(response, "text", "") or "").strip()
+        if body:
+            parts.append(body[:200])
+    return ": ".join(parts)
 
 
 # Maps ISO country code → GDELT search keyword
@@ -55,7 +80,13 @@ class GDELTIngestor(BaseIngestor):
         now = self.utcnow()
         loop = asyncio.get_event_loop()
 
-        for iso_code, keyword in self.countries.items():
+        throttled = 0
+        for i, (iso_code, keyword) in enumerate(self.countries.items()):
+            # Pace *between* requests rather than after each one, so the gap
+            # is enforced even when a query fails early.
+            if i:
+                await asyncio.sleep(_REQUEST_INTERVAL_SEC)
+
             end_date = (now - timedelta(days=1)).strftime("%Y-%m-%d")
             start_date = (now - timedelta(days=2)).strftime("%Y-%m-%d")
             f = Filters(
@@ -82,11 +113,12 @@ class GDELTIngestor(BaseIngestor):
             except asyncio.TimeoutError:
                 logger.warning("GDELT fetch timed out for %s", iso_code)
             except Exception as exc:
-                logger.warning("GDELT fetch failed for %s: %s", iso_code, exc)
+                if type(exc).__name__ == "RateLimitError":
+                    throttled += 1
+                logger.warning("GDELT fetch failed for %s: %s", iso_code, _describe(exc))
 
             if tone_score is None:
                 logger.debug("No GDELT tone data for %s", iso_code)
-                await asyncio.sleep(3)
                 continue
 
             raws.append(
@@ -103,8 +135,13 @@ class GDELTIngestor(BaseIngestor):
                 )
             )
 
-            await asyncio.sleep(3)
-
+        if throttled:
+            logger.error(
+                "GDELT rate-limited on %d/%d countries this cycle — requests are "
+                "outpacing the 1-per-5s limit, or this IP is still in a throttle "
+                "penalty window from earlier over-limit traffic",
+                throttled, len(self.countries),
+            )
         return raws
 
     def normalise(self, raw: RawRecord) -> list[FeatureRecord]:

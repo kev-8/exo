@@ -225,18 +225,51 @@ class KalshiIngestor(BaseIngestor):
                         )
                     )
 
+        self._warn_if_prices_look_dead(raws)
         return raws
+
+    @staticmethod
+    def _warn_if_prices_look_dead(raws: list[RawRecord]) -> None:
+        """Loudly flag the case where every market prices at zero.
+
+        """
+        if len(raws) < 50:
+            return
+        priced = sum(
+            1 for r in raws
+            if KalshiIngestor._price(r.raw, "yes_ask") > 0
+            or KalshiIngestor._price(r.raw, "yes_bid") > 0
+        )
+        if priced == 0:
+            logger.error(
+                "Kalshi: all %d markets priced at 0.0 — likely an API field "
+                "rename; check the price keys in the /markets response",
+                len(raws),
+            )
+
+    @staticmethod
+    def _price(m: dict, side: str) -> float:
+        """Return a price in probability units (0.0-1.0) for e.g. side='yes_ask'.
+        """
+        val = m.get(f"{side}_dollars")
+        if val is not None:
+            return float(val)
+        legacy = m.get(side)
+        return float(legacy or 0) / 100
 
     def normalise(self, raw: RawRecord) -> list[FeatureRecord]:
         m = raw.raw
         ticker = m.get("ticker", raw.entity)
         now = raw.fetched_at
 
-        yes_ask = float(m.get("yes_ask", 0) or 0) / 100
-        yes_bid = float(m.get("yes_bid", 0) or 0) / 100
-        no_ask = float(m.get("no_ask", 0) or 0) / 100
-        no_bid = float(m.get("no_bid", 0) or 0) / 100
-        volume = float(m.get("volume", 0) or 0)
+        yes_ask = self._price(m, "yes_ask")
+        yes_bid = self._price(m, "yes_bid")
+        no_ask = self._price(m, "no_ask")
+        no_bid = self._price(m, "no_bid")
+        # volume_24h_fp matches the downstream `kalshi_volume_24h` feature and
+        # the opportunity filter's liquidity intent (is this market traded
+        # *now*), where lifetime `volume_fp` would let a dormant market pass.
+        volume = float(m.get("volume_24h_fp") or m.get("volume") or 0)
         spread = round(yes_ask - yes_bid, 4)
         mid = round((yes_ask + yes_bid) / 2, 4) if yes_ask and yes_bid else yes_ask
 
@@ -274,7 +307,7 @@ class KalshiIngestor(BaseIngestor):
                 entity=ticker,
                 signal_type="market_volume",
                 value=volume,
-                metadata={"open_interest": float(m.get("open_interest", 0) or 0)},
+                metadata={"open_interest": float(m.get("open_interest_fp") or m.get("open_interest") or 0)},
                 ticker=ticker,
                 as_of_ts=now,
             ),
