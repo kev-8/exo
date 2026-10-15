@@ -31,11 +31,6 @@ from exo.store.feature_store import FeatureStore
 
 logger = logging.getLogger(__name__)
 
-# Disabled everywhere (prod and local campaigns alike), independent of any
-# per-deployment exclude_jobs: GDELT rate-limits at the source and nothing
-# emits news_magnitude any more. See project memory before removing this.
-_GDELT_DISABLED: set[str] = {"gdelt_ingest"}
-
 
 class ExoScheduler:
     """Orchestrate all periodic data ingestion and risk index update jobs.
@@ -45,7 +40,7 @@ class ExoScheduler:
     store:
         Shared feature store instance.
     exclude_jobs:
-        Job ids to skip in addition to the always-disabled set above — e.g.
+        Job ids to skip — e.g.
         {"kalshi_rest"} on a deployment that doesn't need Kalshi.
     """
 
@@ -53,7 +48,7 @@ class ExoScheduler:
         self.store = store or FeatureStore()
         self.bus = get_bus()
         self._scheduler = AsyncIOScheduler()
-        self._exclude_jobs = exclude_jobs | _GDELT_DISABLED
+        self._exclude_jobs = exclude_jobs
         # Populated as jobs are skipped in _add_ingestor_job — a source this
         # deployment never ingests will never have fresh data, so alerting on
         # it forever is just noise, not a signal.
@@ -98,11 +93,8 @@ class ExoScheduler:
     def setup_jobs(self) -> None:
         """Register all scheduled jobs."""
 
-        # GDELT — disabled via _GDELT_DISABLED (not a library/Railway bug: GDELT
-        # rate-limits at 1 req/5s and this IP is in a throttle penalty window
-        # even with pacing fixed; separately, nothing has emitted news_magnitude
-        # since an April refactor, so conflict_intensity's acute tier gets no
-        # input regardless). See project memory before re-enabling.
+        # GDELT — every 15 min, matching the cadence GDELT publishes its event
+        # exports at. The first cycle after a restart backfills a week of files.
         self._add_ingestor_job(self.gdelt, "gdelt_ingest",
                                trigger=IntervalTrigger(minutes=15))
 

@@ -10,7 +10,6 @@ dependencies = [
     "httpx>=0.27",
     "websockets>=12",
     "cryptography>=42",
-    "gdeltdoc>=1.4",
     "fredapi>=0.5",
     "pytrends>=4.9",
     "numpy>=1.26",

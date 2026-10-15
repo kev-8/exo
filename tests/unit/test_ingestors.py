@@ -16,51 +16,6 @@ def _raw(source, entity, raw):
 
 
 # ---------------------------------------------------------------------------
-# GDELT
-# ---------------------------------------------------------------------------
-
-class TestGDELTNormalise:
-    @pytest.fixture
-    def ingestor(self):
-        from exo.ingestion.gdelt import GDELTIngestor
-        return GDELTIngestor.__new__(GDELTIngestor)  # no store/bus needed for normalise
-
-    def test_sentiment_record_emitted(self, ingestor):
-        raw = _raw("gdelt", "RU", {
-            "tone_score": -0.35,
-            "keyword": "Russia", "start_date": "2026-04-04", "end_date": "2026-04-05",
-        })
-        records = ingestor.normalise(raw)
-        assert len(records) == 1
-        assert records[0].signal_type == "news_sentiment"
-
-    def test_sentiment_value(self, ingestor):
-        raw = _raw("gdelt", "IL", {
-            "tone_score": -0.40,
-            "keyword": "Israel", "start_date": "2026-04-04", "end_date": "2026-04-05",
-        })
-        records = ingestor.normalise(raw)
-        # (1.0 - (-0.40)) / 2 = 0.70
-        assert abs(records[0].value - 0.70) < 1e-6
-
-    def test_missing_tone_returns_empty(self, ingestor):
-        raw = _raw("gdelt", "CN", {
-            "tone_score": None,
-            "keyword": "China", "start_date": "2026-04-04", "end_date": "2026-04-05",
-        })
-        assert ingestor.normalise(raw) == []
-
-    def test_source_and_entity(self, ingestor):
-        raw = _raw("gdelt", "UA", {
-            "tone_score": -0.25,
-            "keyword": "Ukraine", "start_date": "2026-04-04", "end_date": "2026-04-05",
-        })
-        records = ingestor.normalise(raw)
-        assert records[0].source == "gdelt"
-        assert records[0].entity == "UA"
-
-
-# ---------------------------------------------------------------------------
 # Polymarket
 # ---------------------------------------------------------------------------
 
