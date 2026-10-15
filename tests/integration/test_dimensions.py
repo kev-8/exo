@@ -47,24 +47,24 @@ class TestPoliticalStability:
 
     def test_wgi_political_stability_inverted(self, scorer, store):
         # WGI=1.0 (well-governed) → instability = 1 - 1.0 = 0.0
-        _write(store, "world_bank", "US", "political_stability", 1.0)
+        _write(store, "wgi", "US", "political_stability", 1.0)
         dim = scorer.political_stability("US", _now())
         assert abs(dim.score - 0.0) < 1e-6
 
     def test_wgi_voice_accountability_inverted(self, scorer, store):
-        _write(store, "world_bank", "RU", "voice_accountability", 0.2)
+        _write(store, "wgi", "RU", "voice_accountability", 0.2)
         dim = scorer.political_stability("RU", _now())
         assert abs(dim.score - 0.8) < 1e-6  # 1 - 0.2
 
     def test_two_wgi_signals_averaged(self, scorer, store):
-        _write(store, "world_bank", "CN", "political_stability", 0.6)
-        _write(store, "world_bank", "CN", "voice_accountability", 0.4)
+        _write(store, "wgi", "CN", "political_stability", 0.6)
+        _write(store, "wgi", "CN", "voice_accountability", 0.4)
         dim = scorer.political_stability("CN", _now())
         # instability = (1-0.6 + 1-0.4) / 2 = (0.4 + 0.6) / 2 = 0.5
         assert abs(dim.score - 0.5) < 1e-6
 
     def test_contributing_signals_present(self, scorer, store):
-        _write(store, "world_bank", "IL", "political_stability", 0.3)
+        _write(store, "wgi", "IL", "political_stability", 0.3)
         dim = scorer.political_stability("IL", _now())
         assert any("wgi_political_stability" in s for s in dim.contributing_signals)
 
@@ -248,7 +248,7 @@ class TestEconomicStress:
 
     def test_wgi_rule_of_law_inverted(self, scorer, store):
         # rule_of_law=1.0 (good governance) → normalised = 1 - 1.0 = 0.0 (low stress)
-        _write(store, "world_bank", "US", "rule_of_law", 1.0)
+        _write(store, "wgi", "US", "rule_of_law", 1.0)
         dim = scorer.economic_stress("US", _now())
         assert dim.score < 0.5
 
@@ -275,7 +275,7 @@ class TestCompositeWeights:
         }
 
     def test_all_scores_in_range(self, scorer, store):
-        _write(store, "world_bank", "IL", "political_stability", 0.4)
+        _write(store, "wgi", "IL", "political_stability", 0.4)
         # ingestor normalises: raw tone=-0.35 → stored value=(1-(-0.35))/2=0.675
         _write(store, "gdelt", "IL", "news_sentiment", 0.675)
         _write(store, "unga_votes", "IL", "ideal_point_variance", 0.44)

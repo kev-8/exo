@@ -28,6 +28,10 @@ from exo.store.feature_store import FeatureStore
 
 logger = logging.getLogger(__name__)
 
+# Governance signals come from the annual WGI release (exo.ingestion.wgi), not
+# the World Bank indicator API, which stopped serving them in May 2026.
+_WGI_SOURCE = {"rule_of_law": "wgi", "control_of_corruption": "wgi"}
+
 TIERS = ("structural", "short_term", "acute")
 
 
@@ -90,7 +94,7 @@ class DimensionScorer:
 
         ps_rec = self.store.get_latest(
             entity=country, signal_type="political_stability",
-            source="world_bank", as_of_ts=now,
+            source="wgi", as_of_ts=now,
         )
         if ps_rec:
             s_scores.append(1.0 - _safe(ps_rec.value))
@@ -98,7 +102,7 @@ class DimensionScorer:
 
         va_rec = self.store.get_latest(
             entity=country, signal_type="voice_accountability",
-            source="world_bank", as_of_ts=now,
+            source="wgi", as_of_ts=now,
         )
         if va_rec:
             s_scores.append(1.0 - _safe(va_rec.value))
@@ -342,7 +346,7 @@ class DimensionScorer:
         for sig in wb_signals:
             rec = self.store.get_latest(
                 entity=country, signal_type=sig,
-                source="world_bank", as_of_ts=now,
+                source=_WGI_SOURCE.get(sig, "world_bank"), as_of_ts=now,
             )
             if rec is not None:
                 raw = rec.value

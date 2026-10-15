@@ -63,6 +63,7 @@ STALENESS_THRESHOLDS: dict[str, float] = {
     "google_trends": 2 * 3600,  # 2 hours
     "fred": 12 * 3600,
     "world_bank": 24 * 3600,
+    "wgi": 400 * 86400,         # annual release; a missed year is the alert
     "eia": 24 * 3600,
     "polymarket": 60 * 60,
     "unga_votes": 7 * 24 * 3600,     # weekly

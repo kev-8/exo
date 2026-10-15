@@ -96,24 +96,6 @@ class TestWorldBankNormalise:
         # WorldBankIngestor.normalise needs self.source
         return r
 
-    def test_wgi_normalisation_midpoint(self, ingestor):
-        raw = self._make_raw({"PV.EST": 0.0})
-        records = ingestor.normalise(raw)
-        rec = next(r for r in records if r.signal_type == "political_stability")
-        assert abs(rec.value - 0.5) < 1e-6  # (0 + 2.5) / 5
-
-    def test_wgi_normalisation_max(self, ingestor):
-        raw = self._make_raw({"PV.EST": 2.5})
-        records = ingestor.normalise(raw)
-        rec = next(r for r in records if r.signal_type == "political_stability")
-        assert abs(rec.value - 1.0) < 1e-6
-
-    def test_wgi_normalisation_min(self, ingestor):
-        raw = self._make_raw({"VA.EST": -2.5})
-        records = ingestor.normalise(raw)
-        rec = next(r for r in records if r.signal_type == "voice_accountability")
-        assert abs(rec.value - 0.0) < 1e-6
-
     def test_energy_imports_neutral(self, ingestor):
         raw = self._make_raw({"EG.IMP.CONS.ZS": 0.0})
         records = ingestor.normalise(raw)

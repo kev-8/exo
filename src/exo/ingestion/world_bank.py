@@ -22,7 +22,7 @@ INDICATORS: dict[str, tuple[str, int]] = {
     "SL.UEM.TOTL.ZS": ("unemployment_rate", 1),          # Unemployment %
     "NY.GNS.ICTR.ZS": ("gross_savings", -1),             # Gross savings %
     # WGI indicators (PV.EST, VA.EST, RL.EST, CC.EST) were archived from the WB API in 2026.
-    # WGI data is seeded directly via scripts/seed_wgi.py — do not fetch here.
+    # WGI is ingested from the annual release file instead — see exo/ingestion/wgi.py.
     "EG.IMP.CONS.ZS": ("energy_imports_pct", 1),        # Energy imports as % of total energy use
     "NE.EXP.GNFS.ZS": ("exports_pct_gdp", -1),         # Exports of goods & services (% of GDP)
     "NE.IMP.GNFS.ZS": ("imports_pct_gdp", 1),           # Imports of goods & services (% of GDP)

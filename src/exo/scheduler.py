@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.combining import OrTrigger
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -24,6 +25,7 @@ from exo.ingestion.ofac import OFACIngestor
 from exo.ingestion.ucdp import UCDPCandidateIngestor, UCDPGEDIngestor
 from exo.ingestion.unga_votes import UNGAVotesIngestor
 from exo.ingestion.wits import WITSIngestor
+from exo.ingestion.wgi import WGIIngestor
 from exo.ingestion.world_bank import WorldBankIngestor
 from exo.models import StalenessAlert
 from exo.risk_index.engine import RiskIndexEngine, COUNTRIES
@@ -61,6 +63,7 @@ class ExoScheduler:
         self.fred = FREDIngestor(**_kwargs)
         self.google_trends = GoogleTrendsIngestor(**_kwargs)
         self.world_bank = WorldBankIngestor(**_kwargs)
+        self.wgi = WGIIngestor(**_kwargs)
         self.unga_votes = UNGAVotesIngestor(**_kwargs)
         self.eia = EIAIngestor(**_kwargs)
         self.polymarket = PolymarketIngestor(**_kwargs)
@@ -129,6 +132,19 @@ class ExoScheduler:
         # World Bank — daily at 06:00 UTC
         self._add_ingestor_job(self.world_bank, "world_bank_ingest",
                                trigger=CronTrigger(hour=6, minute=0, timezone="UTC"))
+
+        # WGI — annual release on an unannounced date, usually Sep–Dec: weekly
+        # Mondays through that window, the 1st of the month otherwise, plus once
+        # at startup so a fresh deploy doesn't wait for the next poll. A poll
+        # with no newer edition is one HEAD request and writes nothing.
+        self._add_ingestor_job(
+            self.wgi, "wgi_ingest",
+            trigger=OrTrigger([
+                CronTrigger(month="9-12", day_of_week="mon", hour=6, minute=15, timezone="UTC"),
+                CronTrigger(month="1-8", day=1, hour=6, minute=15, timezone="UTC"),
+            ]),
+            next_run_time=datetime.now(timezone.utc),
+        )
 
         # EIA — daily at 06:00 UTC
         self._add_ingestor_job(self.eia, "eia_ingest",
