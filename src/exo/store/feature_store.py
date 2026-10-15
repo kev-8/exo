@@ -504,6 +504,49 @@ class FeatureStore:
 
         return {str(r[0]) for r in rows if r[0] is not None}
 
+    def latest_metadata_by_entity(
+        self, source: str, signal_type: str, key: str
+    ) -> dict[str, str]:
+        """Return ``{entity: metadata[key]}`` from each entity's newest row.
+
+        Companion to :meth:`distinct_entities` for ingestors that write a row
+        per *version* of something rather than per observation: the value is
+        typically a fingerprint of the content, so the ingestor can tell "I
+        already hold this" from "this changed upstream and needs a new row".
+
+        Entities whose newest row lacks *key* are omitted.
+        """
+        files = self._parquet_files(source)
+        if not files:
+            return {}
+
+        sql = """
+            SELECT entity, json_extract_string(metadata, '$.' || $3) AS v
+            FROM (
+                SELECT entity, metadata,
+                       row_number() OVER (
+                           PARTITION BY entity ORDER BY as_of_ts DESC
+                       ) AS rn
+                FROM read_parquet($1, union_by_name=true)
+                WHERE signal_type = $2
+            )
+            WHERE rn = 1
+        """
+        _db = duckdb.connect(":memory:")
+        try:
+            _db.execute(f"SET memory_limit='{_SCAN_MEMORY_LIMIT}'")
+            rows = _db.execute(sql, [files, signal_type, key]).fetchall()
+        except Exception as exc:
+            # As in distinct_entities: an unreadable store must not be
+            # mistaken for an empty one by a caller that dedupes against it.
+            raise RuntimeError(
+                f"latest_metadata_by_entity failed for source={source}: {exc}"
+            ) from exc
+        finally:
+            _db.close()
+
+        return {str(e): str(v) for e, v in rows if e is not None and v is not None}
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

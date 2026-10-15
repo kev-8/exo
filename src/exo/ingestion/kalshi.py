@@ -2,6 +2,12 @@
 
 REST polls market metadata every 15 minutes, scoped to a category-filtered
 set of series (see _refresh_focused_series / _refresh_active_series below).
+
+Each poll emits per-snapshot observations (market_price / market_volume /
+market_spread) and, only when they are new or have changed, a `contract_terms`
+record carrying the contract's static settlement criteria — see
+_terms_fingerprint for why those are a separate signal rather than extra
+metadata on every price row.
 """
 
 from __future__ import annotations
@@ -36,6 +42,27 @@ _ACTIVE_REFRESH_INTERVAL = timedelta(hours=1)
 # Max concurrent /markets requests during a series probe. Kept modest to
 # stay well under Kalshi's rate limit even when probing all ~6k series.
 _PROBE_CONCURRENCY = 20
+
+# Fields of the /markets payload that describe how a contract settles, as
+# opposed to how it is currently priced. Captured because misreading the
+# resolution criteria is the dominant source of fake edge: `title` alone is
+# systematically ambiguous ("Fed cuts rates" says nothing about which meeting,
+# which measure, or the rounding convention), and a forecaster reasoning from
+# the title instead of the rules will manufacture divergence from the market
+# that reflects its own misunderstanding rather than genuine mispricing.
+_TERMS_FIELDS = (
+    "rules_primary",
+    "rules_secondary",
+    "can_close_early",
+    "strike_type",
+    "floor_strike",
+    "cap_strike",
+    "yes_sub_title",
+    "no_sub_title",
+    "subtitle",
+    "market_type",
+    "settlement_timer_seconds",
+)
 
 _CRYPTO_AVAILABLE = False
 try:
@@ -106,6 +133,11 @@ class KalshiIngestor(BaseIngestor):
         # Subset of _series_category currently believed to have open markets.
         self._active_series: set[str] = set()
         self._active_refreshed_at: datetime | None = None
+
+        # ticker -> fingerprint of the settlement terms last written for it.
+        # Seeded lazily from the store so a restart doesn't re-emit terms for
+        # every contract already on disk. None means "not loaded yet".
+        self._terms_seen: dict[str, str] | None = None
 
     # ------------------------------------------------------------------
     # Series discovery
@@ -186,6 +218,49 @@ class KalshiIngestor(BaseIngestor):
         return by_series
 
     # ------------------------------------------------------------------
+    # Settlement terms
+    # ------------------------------------------------------------------
+
+    SOURCE_TERMS_SIGNAL = "contract_terms"
+
+    @staticmethod
+    def _terms(m: dict) -> dict[str, Any]:
+        """Settlement-criteria fields present in *m*, absent keys omitted."""
+        return {k: m[k] for k in _TERMS_FIELDS if m.get(k) not in (None, "")}
+
+    @staticmethod
+    def _terms_fingerprint(terms: dict[str, Any]) -> str:
+        """Stable short hash of *terms*.
+
+        Terms are a property of the contract, not an observation of it: they
+        are identical across all 96 daily snapshots of a ticker. Writing them
+        onto every market_price row would add roughly 210 MB/day of byte-
+        identical text to a store that currently grows 458 MB/day — so they go
+        out as their own signal, emitted once per contract and again only when
+        this fingerprint changes (Kalshi does occasionally amend rules, and a
+        forecast made under the old wording must stay attributable to it).
+        """
+        blob = json.dumps(terms, sort_keys=True, default=str)
+        return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+    def _ensure_terms_seen(self) -> dict[str, str]:
+        """Return the ticker -> fingerprint map, loading it from the store once.
+
+        Propagates a read failure instead of degrading to an empty map: empty
+        means "emit terms for everything", which on a populated store would
+        re-write tens of thousands of unchanged rows.
+        """
+        if self._terms_seen is None:
+            self._terms_seen = self.store.latest_metadata_by_entity(
+                self.source, self.SOURCE_TERMS_SIGNAL, "terms_hash"
+            )
+            logger.info(
+                "Kalshi contract-terms cache seeded with %d tickers",
+                len(self._terms_seen),
+            )
+        return self._terms_seen
+
+    # ------------------------------------------------------------------
     # REST fetch
     # ------------------------------------------------------------------
 
@@ -212,10 +287,24 @@ class KalshiIngestor(BaseIngestor):
                 # this cycle so the next fast poll doesn't keep probing them.
                 self._active_series = {t for t, markets in by_series.items() if markets}
 
+            terms_seen = self._ensure_terms_seen()
             for series_ticker, markets in by_series.items():
                 category = self._series_category.get(series_ticker, "")
                 for m in markets:
-                    raw = {**m, "category": category}
+                    # Decided here rather than in normalise() so the terms row
+                    # is emitted at most once per cycle per ticker even if the
+                    # same market appears under two series.
+                    terms = self._terms(m)
+                    fp = self._terms_fingerprint(terms) if terms else ""
+                    emit_terms = bool(terms) and terms_seen.get(m.get("ticker", "")) != fp
+
+                    raw = {
+                        **m,
+                        "category": category,
+                        "series_ticker": series_ticker,
+                        "_emit_terms": emit_terms,
+                        "_terms_hash": fp,
+                    }
                     raws.append(
                         RawRecord(
                             source=self.source,
@@ -349,5 +438,53 @@ class KalshiIngestor(BaseIngestor):
                 as_of_ts=now,
             ),
         ]
+
+        if m.get("_emit_terms"):
+            terms = self._terms(m)
+            records.append(
+                FeatureRecord(
+                    source=self.source,
+                    entity=ticker,
+                    signal_type=self.SOURCE_TERMS_SIGNAL,
+                    # The row exists to carry metadata; value is the number of
+                    # terms fields the payload actually supplied, which makes a
+                    # thinning upstream response visible in the signal itself.
+                    value=float(len(terms)),
+                    metadata={
+                        **terms,
+                        "terms_hash": m.get("_terms_hash", ""),
+                        "title": m.get("title", ""),
+                        "category": m.get("category", ""),
+                        "series_ticker": m.get("series_ticker", ""),
+                        "event_ticker": m.get("event_ticker", ""),
+                        "close_time": close_str,
+                    },
+                    ticker=ticker,
+                    as_of_ts=now,
+                )
+            )
+
         return records
+
+    # ------------------------------------------------------------------
+    # Run loop
+    # ------------------------------------------------------------------
+
+    async def run(self) -> list[FeatureRecord]:
+        """Poll, write, then remember which terms rows actually persisted.
+
+        The terms cache advances on the write rather than on the fetch for the
+        same reason the resolution archive does: BaseIngestor.run logs a
+        write_batch failure and returns an empty list, and a terms row skipped
+        on that basis would never be re-emitted — the next cycle would see an
+        unchanged fingerprint and stay quiet. Price rows are unaffected either
+        way, since the next poll re-reads the same quote.
+        """
+        written = await super().run()
+        if written:
+            cache = self._ensure_terms_seen()
+            for r in written:
+                if r.signal_type == self.SOURCE_TERMS_SIGNAL:
+                    cache[r.entity] = str(r.metadata.get("terms_hash", ""))
+        return written
 
