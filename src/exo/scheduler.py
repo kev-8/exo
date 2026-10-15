@@ -18,6 +18,7 @@ from exo.ingestion.fred import FREDIngestor
 from exo.ingestion.gdelt import GDELTIngestor
 from exo.ingestion.google_trends import GoogleTrendsIngestor
 from exo.ingestion.kalshi import KalshiIngestor
+from exo.ingestion.kalshi_resolution import KalshiResolutionIngestor
 from exo.ingestion.polymarket import PolymarketIngestor
 from exo.ingestion.ofac import OFACIngestor
 from exo.ingestion.ucdp import UCDPCandidateIngestor, UCDPGEDIngestor
@@ -61,6 +62,7 @@ class ExoScheduler:
         _kwargs = {"store": self.store, "bus": self.bus}
         self.gdelt = GDELTIngestor(**_kwargs)
         self.kalshi = KalshiIngestor(**_kwargs)
+        self.kalshi_resolution = KalshiResolutionIngestor(**_kwargs)
         self.fred = FREDIngestor(**_kwargs)
         self.google_trends = GoogleTrendsIngestor(**_kwargs)
         self.world_bank = WorldBankIngestor(**_kwargs)
@@ -107,6 +109,14 @@ class ExoScheduler:
         # Kalshi market data — every 15 min
         self._add_ingestor_job(self.kalshi, "kalshi_rest",
                                trigger=IntervalTrigger(minutes=15))
+
+        # Kalshi settlements — every 6 hours. Unlike the price poll this is
+        # archival: each contract settles once and the row never changes, so
+        # the cadence only needs to beat the rate at which Kalshi ages settled
+        # markets out of /markets. Losing a settlement loses the label for
+        # every price observation of that contract, permanently.
+        self._add_ingestor_job(self.kalshi_resolution, "kalshi_resolution",
+                               trigger=IntervalTrigger(hours=6))
 
         # Finnhub — every 30 min
         self._add_ingestor_job(self.finnhub, "finnhub_ingest",

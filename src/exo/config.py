@@ -58,6 +58,7 @@ REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 STALENESS_THRESHOLDS: dict[str, float] = {
     "gdelt": 15 * 60,           # 15 min
     "kalshi": 15 * 60,          # 15 min
+    "kalshi_resolution": 12 * 3600,  # 6h poll; a missed sweep is not urgent
     "finnhub": 30 * 60,         # 30 min
     "google_trends": 2 * 3600,  # 2 hours
     "fred": 12 * 3600,

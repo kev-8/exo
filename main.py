@@ -18,8 +18,13 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 
-logger = logging.getLogger("exo.main")
+# httpx logs one INFO line per request. The hourly series refresh and the
+# 6-hourly settlement sweep each issue ~6,650 of them, which measured at 99.3%
+# of all log lines — 24 MB in 10 hours, burying the ingest-cycle and staleness
+# lines the log exists for. WARNING still surfaces transport-level failures.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
+logger = logging.getLogger("exo.main")
 
 async def main() -> None:
     from exo.scheduler import ExoScheduler

@@ -20,7 +20,7 @@ import logging
 import os
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import duckdb
 import pandas as pd
@@ -29,6 +29,11 @@ from exo import config
 from exo.models import FeatureQuery, FeatureRecord
 
 logger = logging.getLogger(__name__)
+
+# Ceiling for the whole-source scans below. They run against every partition of
+# a source, so on a store that keeps growing an unbounded query would eventually
+# compete with the live ingestion process for memory rather than just being slow.
+_SCAN_MEMORY_LIMIT = "2GB"
 
 _REDIS_AVAILABLE = False
 try:
@@ -459,6 +464,45 @@ class FeatureStore:
         if self.backtest_mode and as_of_ts is None:
             raise ValueError("Backtest mode requires as_of_ts on every read")
         return self.read(FeatureQuery(ticker=ticker, as_of_ts=as_of_ts))
+
+    def distinct_entities(self, source: str, signal_type: str | None = None) -> set[str]:
+        """Return every distinct ``entity`` stored under *source*.
+
+        Scans only the ``entity``/``signal_type`` columns across the source's
+        partitions, so it stays cheap even on a store with millions of rows —
+        unlike :meth:`read`, which materialises whole records and is capped by
+        ``FeatureQuery.limit``.
+
+        Exists for append-only ingestors that must not re-write rows they
+        already hold (resolution outcomes, say, which never change once
+        settled): seeding a seen-set from the store keeps the store itself the
+        single source of truth instead of a sidecar index that can drift.
+        """
+        files = self._parquet_files(source)
+        if not files:
+            return set()
+
+        sql = "SELECT DISTINCT entity FROM read_parquet($1, union_by_name=true)"
+        params: list[Any] = [files]
+        if signal_type is not None:
+            sql += " WHERE signal_type = $2"
+            params.append(signal_type)
+
+        _db = duckdb.connect(":memory:")
+        try:
+            _db.execute(f"SET memory_limit='{_SCAN_MEMORY_LIMIT}'")
+            rows = _db.execute(sql, params).fetchall()
+        except Exception as exc:
+            # An unreadable store must not look like an empty one: callers
+            # dedupe against this, and returning set() would invite a full
+            # re-write of everything already persisted.
+            raise RuntimeError(
+                f"distinct_entities failed for source={source}: {exc}"
+            ) from exc
+        finally:
+            _db.close()
+
+        return {str(r[0]) for r in rows if r[0] is not None}
 
     # ------------------------------------------------------------------
     # Internal helpers
