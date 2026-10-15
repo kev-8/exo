@@ -61,8 +61,10 @@ async def lifespan(app: FastAPI):
     # for the separate exo-pm project, which ingests it locally. Running it
     # here just fills the volume with files nothing here uses (it's what
     # exhausted the volume's inodes and crashed this deployment previously).
+    # The settlement archiver is excluded for the same reason, and because a
+    # second copy would double its ~6,650-request sweeps against Kalshi.
     from exo.scheduler import ExoScheduler
-    scheduler = ExoScheduler(exclude_jobs={"kalshi_rest"})
+    scheduler = ExoScheduler(exclude_jobs={"kalshi_rest", "kalshi_resolution"})
     await scheduler.start()
     logger.info("exo scheduler started")
     yield
