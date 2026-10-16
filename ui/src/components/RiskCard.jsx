@@ -41,7 +41,7 @@ export default function RiskCard({ snapshot, country, onClose }) {
             {/* ── Left column: identity + composite + tiers ── */}
             <div className="flex flex-col justify-between">
               {/* Header */}
-              <div className="flex items-start justify-between mb-8">
+              <div className="flex items-start justify-between mb-4">
                 <div className="flex items-start gap-4">
                   {country?.iso2 && (
                     <img
@@ -68,7 +68,7 @@ export default function RiskCard({ snapshot, country, onClose }) {
               </div>
 
               {/* Three-tier scores */}
-              <div className="grid grid-cols-3 gap-3 mt-6">
+              <div className="grid grid-cols-3 gap-3">
                 {[
                   { label: 'STRUCTURAL', score: structural_score },
                   { label: 'SHORT-TERM', score: short_term_score },
@@ -79,11 +79,11 @@ export default function RiskCard({ snapshot, country, onClose }) {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 + i * 0.07 }}
-                    className="rounded p-4 text-center"
+                    className="rounded px-2 py-2 text-center"
                     style={{}}
                   >
-                    <div className="font-display text-[10px] tracking-[0.2em] text-slate-200 mb-1.5">{label}</div>
-                    <div className="font-mono text-xl font-medium" style={{ color: riskColor(score) }}>
+                    <div className="font-display text-xs tracking-[0.2em] text-slate-200 mb-1.5">{label}</div>
+                    <div className="font-mono text-2xl font-medium" style={{ color: riskColor(score) }}>
                       {score.toFixed(2)}
                     </div>
                   </motion.div>
@@ -91,15 +91,15 @@ export default function RiskCard({ snapshot, country, onClose }) {
               </div>
 
               {/* Timestamp */}
-              <div className="mt-auto pt-10 font-mono text-[10px] text-slate-500">
+              <div className="mt-auto pt-5 font-mono text-[10px] text-slate-500">
                 as of {new Date(snapshot.as_of_ts).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
               </div>
             </div>
 
             {/* ── Right column: dimension bars ── */}
             <div className="flex flex-col justify-center">
-              <div className="font-display text-xs tracking-[0.2em] text-slate-200 mb-6">RISK DIMENSIONS</div>
-              <div className="space-y-5">
+              <div className="font-display text-xs tracking-[0.2em] text-slate-200 mb-4">RISK DIMENSIONS</div>
+              <div className="space-y-4">
                 {dimensions.map((dim, i) => (
                   <ScoreBar
                     key={dim.name}

@@ -183,12 +183,12 @@ export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeD
                 {/* Risk card */}
                 {type === 'risk' && risk && (
                   <>
-                    <div className="font-display text-xs tracking-[0.2em] text-white mt-6 mb-4">
+                    <div className="font-display text-sm tracking-[0.2em] text-white mt-6 mb-4">
                       RISK SCORE
                     </div>
 
                     {/* Tier mini-scores */}
-                    <div className="grid grid-cols-3 gap-2 mt-4 mb-1">
+                    <div className="grid grid-cols-3 gap-2">
                       {[
                         { label: 'STRUCTURAL', score: risk.structural },
                         { label: 'SHORT-TERM', score: risk.shortTerm },
@@ -196,10 +196,10 @@ export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeD
                       ].map(({ label, score }) => (
                         <div
                           key={label}
-                          className="rounded p-2 text-center"
+                          className="rounded px-2 py-1 text-center"
                           style={{}}
                         >
-                          <div className="font-display text-[9px] tracking-wider text-white mb-0.5">{label}</div>
+                          <div className="font-mono text-sm text-white mb-0.5">{label}</div>
                           <div className="font-mono text-sm" style={{ color: riskColor(score) }}>
                             {score.toFixed(2)}
                           </div>
@@ -213,7 +213,7 @@ export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeD
                 {/* Trade card */}
                 {type === 'trade' && trade && (
                   <>
-                    <div className="font-display text-xs tracking-[0.2em] text-white mt-6 mb-4">
+                    <div className="font-display text-sm tracking-[0.2em] text-white mt-6 mb-4">
                       TOP TRADE PARTNERS
                     </div>
                     <div className="space-y-3">
