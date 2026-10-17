@@ -14,6 +14,9 @@
   --red: #ff3b5c;
   --amber: #f59e0b;
   --green: #10b981;
+  /* Horizontal inset shared by the header and the country selector so their
+     left edges line up at every viewport width. */
+  --edge-x: clamp(1.25rem, 4vw, 3rem);
 }
 
 html, body, #root {

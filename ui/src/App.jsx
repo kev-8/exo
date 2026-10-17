@@ -119,8 +119,8 @@ export default function App() {
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: hideChrome ? 0 : 1, y: 0 }}
         transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-        className="absolute top-0 left-0 right-0 flex items-start justify-between pointer-events-none px-5 py-6 md:px-12 md:py-8"
-        style={{ zIndex: 30 }}
+        className="absolute top-0 left-0 right-0 flex items-start justify-between pointer-events-none py-6 md:py-8"
+        style={{ zIndex: 30, paddingInline: 'var(--edge-x)' }}
       >
         {/* Logo */}
         <div>
@@ -148,8 +148,8 @@ export default function App() {
         className="absolute"
         style={{
           bottom: 'clamp(1.25rem, 4vh, 2.5rem)',
-          left: 'clamp(1.25rem, 4vw, 3rem)',
-          width: 'min(22rem, calc(100vw - 2.5rem))',
+          left: 'var(--edge-x)',
+          width: 'min(22rem, calc(100vw - 2 * var(--edge-x)))',
           zIndex: 30,
           pointerEvents: hideChrome ? 'none' : 'auto',
         }}
