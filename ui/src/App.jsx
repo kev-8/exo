@@ -181,7 +181,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.97 }}
               transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-              className="grid gap-5 w-full pointer-events-auto relative grid-cols-1 md:grid-cols-2 px-4 md:px-10 py-6 md:py-0"
+              className="grid gap-5 w-full pointer-events-auto relative grid-cols-1 md:grid-cols-2 px-4 md:px-10 py-6 md:py-10"
               style={{
                 maxWidth: '1120px',
                 maxHeight: '100dvh',
@@ -192,7 +192,7 @@ export default function App() {
             >
               {/* Back to globe — explicit dismiss, since tapping outside the
                   cards is unreliable on phones where they fill the screen */}
-              <div style={{ gridColumn: '1 / -1' }} className="flex justify-end">
+              <div style={{ gridColumn: '1 / -1' }} className="flex justify-end mb-1 md:mb-2">
                 <button
                   onClick={handleDeselect}
                   className="font-display text-[11px] tracking-[0.2em] uppercase rounded px-3 py-2 border-white flex items-center gap-2"
