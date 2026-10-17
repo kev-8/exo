@@ -22,6 +22,7 @@ export default function App() {
   const [showcaseIso2,    setShowcaseIso2]    = useState(null)
   const [showcaseType,    setShowcaseType]    = useState(null)
   const [menuOpen,        setMenuOpen]        = useState(false)
+  const [hoveredShowcase, setHoveredShowcase] = useState(null)
   const menuOpenRef = useRef(false)
   const globeApiRef = useRef(null)
   const [error,           setError]           = useState(null)
@@ -57,9 +58,14 @@ export default function App() {
     setShowcaseType(type)
   }, [])
 
+  const handleShowcaseHover = useCallback((iso2, hovering) => {
+    setHoveredShowcase(h => hovering ? iso2 : (h === iso2 ? null : h))
+  }, [])
+
   const handleSelect = useCallback(async (iso2) => {
     if (iso2 === selected) return
     setSelected(iso2)
+    setHoveredShowcase(null)
     setSignals([])
 
     if (!riskData[iso2]) {
@@ -96,7 +102,7 @@ export default function App() {
           onCountryClick={handleSelect}
           onGlobeClick={handleDeselect}
           onShowcaseChange={handleShowcaseChange}
-          paused={!!selected || menuOpen}
+          paused={!!selected || menuOpen || (hoveredShowcase !== null && hoveredShowcase === showcaseIso2)}
         />
       </div>
 
@@ -110,6 +116,8 @@ export default function App() {
             riskData={riskData}
             tradeData={tradeData}
             globeApiRef={globeApiRef}
+            onSelect={handleSelect}
+            onHoverChange={handleShowcaseHover}
           />
         )}
       </AnimatePresence>

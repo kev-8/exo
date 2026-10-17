@@ -84,7 +84,7 @@ function liveTrade(data) {
   }
 }
 
-export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeData, globeApiRef }) {
+export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeData, globeApiRef, onSelect, onHoverChange }) {
   const entry   = SHOWCASE.find(s => s.iso2 === showcaseIso2)
   const country = countries?.find(c => c.iso2 === showcaseIso2)
   const type    = entry?.type
@@ -138,13 +138,29 @@ export default function ShowcaseCard({ showcaseIso2, countries, riskData, tradeD
             exit={{ opacity: 0, x: slideX }}
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             transformTemplate={(_, generated) => `translateY(-50%) ${generated}`}
-            className="absolute pointer-events-none"
+            className="absolute group cursor-pointer rounded-lg outline-none"
             style={wrapStyle}
+            role="button"
+            tabIndex={0}
+            aria-label={`Open ${country.name} details`}
+            onClick={() => onSelect?.(showcaseIso2)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onSelect?.(showcaseIso2)
+              }
+            }}
+            // Hover/focus holds the globe still so the card doesn't slide away
+            // mid-read. Reported per country so a card that is fading out
+            // (and never fires mouseleave once unmounted) can't pin the globe.
+            onMouseEnter={() => onHoverChange?.(showcaseIso2, true)}
+            onMouseLeave={() => onHoverChange?.(showcaseIso2, false)}
+            onFocus={() => onHoverChange?.(showcaseIso2, true)}
+            onBlur={() => onHoverChange?.(showcaseIso2, false)}
           >
             <div
-              className="rounded-lg overflow-hidden border-white"
+              className="rounded-lg overflow-hidden border-white bg-white/[0.03] transition-colors duration-200 group-hover:bg-white/[0.08] group-focus-visible:bg-white/[0.08] group-focus-visible:ring-2 group-focus-visible:ring-[#00E676]"
               style={{
-                background: 'rgba(255,255,255,0.03)',
                 border: '2.5px solid #ffffff',
               }}
             >
