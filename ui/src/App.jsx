@@ -8,8 +8,75 @@ import CountrySelector from './components/CountrySelector'
 import ShowcaseCard from './components/ShowcaseCard'
 import { api } from './lib/api'
 import { useIsMobile } from './hooks/useIsMobile'
+import { NIGHT_SKY_URL } from './lib/sky'
 
 const SHOWCASE_COUNTRIES = ['TW', 'RU', 'IR', 'KE', 'FR', 'NG', 'BR', 'US']
+
+// Intro: the logo fades in centred, holds, then glides to the top-left; the
+// rest of the page fades in after it lands. Timings in ms.
+const LOGO_FADE_MS = 600
+const LOGO_HOLD_MS = 400
+const LOGO_MOVE_MS = 900
+const FONT_WAIT_MS = 2500
+// Screen widths the star field scrolls per full turn of the globe.
+const SKY_SCREENS_PER_TURN = 2
+const LOGO_MOVE = { layout: { duration: LOGO_MOVE_MS / 1000, ease: [0.65, 0, 0.35, 1] } }
+
+function prefersReducedMotion() {
+  return typeof window !== 'undefined'
+    && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+}
+
+// Resolves once the logo fonts and the star field are usable (or after
+// FONT_WAIT_MS), so the centred logo never fades in as a fallback font and
+// reflows mid-animation, and the sky doesn't pop in behind it.
+// fonts.load() resolves empty until the Google Fonts stylesheet has declared
+// the face, so keep asking until it actually returns one.
+function logoFontsReady() {
+  const sky = new Promise(r => {
+    const img = new Image()
+    img.onload = img.onerror = r
+    img.src = NIGHT_SKY_URL
+  })
+  if (!document.fonts?.load) return Promise.race([sky, new Promise(r => setTimeout(r, FONT_WAIT_MS))])
+  const deadline = Date.now() + FONT_WAIT_MS
+  const want = async (font) => {
+    while ((await document.fonts.load(font)).length === 0 && Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 100))
+    }
+  }
+  return Promise.race([
+    Promise.all([sky, want('700 56px Orbitron'), want('400 12px "Chakra Petch"')]),
+    new Promise(r => setTimeout(r, FONT_WAIT_MS)),
+  ]).catch(() => {})
+}
+
+// Wordmark + tagline. Each part carries a layoutId so that when the intro
+// swaps the centred copy for the header copy, framer-motion glides it across.
+// w-fit keeps each box the same size in both places, so the move is a pure
+// translate with no scale distortion.
+function Logo({ centered }) {
+  return (
+    <div className={`flex flex-col ${centered ? 'items-center' : 'items-start'}`}>
+      <motion.h1
+        layoutId="logo-word"
+        transition={LOGO_MOVE}
+        className="font-logo font-bold leading-none tracking-tight w-fit"
+        style={{ fontSize: 'clamp(2.2rem, 4.5vw, 3.5rem)', color: 'white', letterSpacing: '-0.01em' }}
+      >
+        exo
+      </motion.h1>
+      <motion.p
+        layoutId="logo-tagline"
+        transition={LOGO_MOVE}
+        className="font-display tracking-[0.3em] uppercase mt-2 w-fit"
+        style={{ fontSize: '0.72rem', color: '#00E676', letterSpacing: '0.28em'}}
+      >
+        Geopolitical Intelligence
+      </motion.p>
+    </div>
+  )
+}
 
 export default function App() {
   const [countries,       setCountries]       = useState([])
@@ -25,11 +92,53 @@ export default function App() {
   const [hoveredShowcase, setHoveredShowcase] = useState(null)
   const menuOpenRef = useRef(false)
   const globeApiRef = useRef(null)
+  const skyRef      = useRef(null)
   const [error,           setError]           = useState(null)
   const isMobile = useIsMobile()
+  // 'loading' (waiting on fonts) → 'center' → 'moving' → 'done'
+  const [intro, setIntro] = useState(() => prefersReducedMotion() ? 'done' : 'loading')
+  const introDone = intro === 'done'
   // On phones the detail cards fill the screen, and the header/selector (z-30)
   // would otherwise paint on top of them. Give the cards the screen instead.
   const hideChrome = isMobile && !!selected
+
+  useEffect(() => {
+    if (prefersReducedMotion()) return
+    let cancelled = false
+    const timers = []
+    const at = (ms, phase) => timers.push(setTimeout(() => setIntro(phase), ms))
+    logoFontsReady().then(() => {
+      if (cancelled) return
+      setIntro('center')
+      at(LOGO_FADE_MS + LOGO_HOLD_MS, 'moving')
+      at(LOGO_FADE_MS + LOGO_HOLD_MS + LOGO_MOVE_MS, 'done')
+    })
+    return () => { cancelled = true; timers.forEach(clearTimeout) }
+  }, [])
+
+  // Pan the star field with the camera so it drifts as the globe turns (the
+  // sky is distant, so it moves against the globe's surface). One full turn
+  // scrolls SKY_SCREENS_PER_TURN image widths; the strip holds two copies of the panorama, whose
+  // edges meet seamlessly, so the wrap is invisible. Transform-only, so each
+  // frame is a cheap composite rather than a full-screen repaint.
+  useEffect(() => {
+    let rafId, lastX = null
+    const tick = () => {
+      const lng = globeApiRef.current?.getViewLng()
+      const el  = skyRef.current
+      if (lng != null && el) {
+        const w = window.innerWidth
+        const x = Math.round(((((lng / 360) * SKY_SCREENS_PER_TURN * w) % w) + w) % w * 10) / 10
+        if (x !== lastX) {
+          el.style.transform = `translate3d(${x}px, 0, 0)`
+          lastX = x
+        }
+      }
+      rafId = requestAnimationFrame(tick)
+    }
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
+  }, [])
 
   // Countries list
   useEffect(() => {
@@ -91,8 +200,31 @@ export default function App() {
   return (
     <div className="relative w-screen h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
 
-      {/* Globe — full screen */}
-      <div className="absolute inset-0">
+      {/* Star field — shows through the transparent globe canvas, so the intro
+          and the main page share one sky. */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div
+          ref={skyRef}
+          className="absolute top-0 h-full"
+          style={{
+            left: '-100%',
+            width: '200%',
+            backgroundImage: `url(${NIGHT_SKY_URL})`,
+            backgroundSize: '50% 100%',
+            backgroundRepeat: 'repeat-x',
+            willChange: 'transform',
+          }}
+        />
+      </div>
+
+      {/* Globe — full screen. Mounted (and loading) behind the intro, shown once it ends. */}
+      <motion.div
+        className="absolute inset-0"
+        initial={false}
+        animate={{ opacity: introDone ? 1 : 0 }}
+        transition={{ duration: 0.8, ease: 'easeOut' }}
+        style={{ pointerEvents: introDone ? 'auto' : 'none' }}
+      >
         <Globe
           ref={globeApiRef}
           riskData={riskData}
@@ -104,12 +236,17 @@ export default function App() {
           onShowcaseChange={handleShowcaseChange}
           paused={!!selected || menuOpen || (hoveredShowcase !== null && hoveredShowcase === showcaseIso2)}
         />
-      </div>
+      </motion.div>
 
       {/* Showcase card — appears during auto-rotation (desktop/tablet only; fixed
           384px card + per-frame connector-line math don't fit phone widths) */}
+      <motion.div
+        initial={false}
+        animate={{ opacity: introDone ? 1 : 0 }}
+        transition={{ duration: 0.6, delay: introDone ? 0.3 : 0 }}
+      >
       <AnimatePresence>
-        {!selected && !isMobile && (
+        {introDone && !selected && !isMobile && (
           <ShowcaseCard
             showcaseIso2={showcaseIso2}
             countries={countries}
@@ -121,45 +258,46 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+      </motion.div>
+
+      {/* ── Intro: logo centred on the bare page ── */}
+      {(intro === 'loading' || intro === 'center') && (
+        <motion.div
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          style={{ zIndex: 40 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: intro === 'center' ? 1 : 0 }}
+          transition={{ duration: LOGO_FADE_MS / 1000, ease: 'easeOut' }}
+        >
+          <Logo centered />
+        </motion.div>
+      )}
 
       {/* ── Header ── */}
       <motion.div
-        initial={{ opacity: 0, y: -16 }}
-        animate={{ opacity: hideChrome ? 0 : 1, y: 0 }}
-        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+        initial={false}
+        animate={{ opacity: hideChrome ? 0 : 1 }}
+        transition={{ duration: 0.3 }}
         className="absolute top-0 left-0 right-0 flex items-start justify-between pointer-events-none py-6 md:py-8"
         style={{ zIndex: 30, paddingInline: 'var(--edge-x)' }}
       >
-        {/* Logo */}
-        <div>
-          <h1
-            className="font-logo font-bold leading-none tracking-tight"
-            style={{ fontSize: 'clamp(2.2rem, 4.5vw, 3.5rem)', color: 'white', letterSpacing: '-0.01em' }}
-          >
-            exo
-          </h1>
-          <p
-            className="font-display tracking-[0.3em] uppercase mt-2"
-            style={{ fontSize: '0.72rem', color: '#00E676', letterSpacing: '0.28em'}}
-          >
-            Geopolitical Intelligence
-          </p>
-        </div>
+        {/* Logo — lands here from the centre during the intro */}
+        {(intro === 'moving' || introDone) && <Logo />}
 
       </motion.div>
 
       {/* ── Country selector — bottom-left ── */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: hideChrome ? 0 : 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        animate={introDone ? { opacity: hideChrome ? 0 : 1, y: 0 } : { opacity: 0, y: 16 }}
+        transition={{ duration: 0.6, delay: introDone ? 0.15 : 0, ease: [0.16, 1, 0.3, 1] }}
         className="absolute"
         style={{
           bottom: 'clamp(1.25rem, 4vh, 2.5rem)',
           left: 'var(--edge-x)',
           width: 'min(22rem, calc(100vw - 2 * var(--edge-x)))',
           zIndex: 30,
-          pointerEvents: hideChrome ? 'none' : 'auto',
+          pointerEvents: hideChrome || !introDone ? 'none' : 'auto',
         }}
       >
         <CountrySelector

@@ -174,8 +174,9 @@ const Globe = forwardRef(function Globe({
 
     globe
       .width(el.clientWidth).height(el.clientHeight)
+      // Transparent: the star field is a CSS layer behind the canvas (see App),
+      // so it matches the intro and stays still rather than orbiting with the camera.
       .backgroundColor('rgba(0,0,0,0)')
-      .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
       .atmosphereAltitude(0)
       .globeImageUrl(null)
       .globeMaterial(new THREE.MeshPhongMaterial({
@@ -347,6 +348,10 @@ const Globe = forwardRef(function Globe({
   }, [riskData, paused, refreshPins])
 
   useImperativeHandle(ref, () => ({
+    // Camera longitude in degrees, or null before the globe exists.
+    getViewLng() {
+      try { return globeRef.current?.pointOfView().lng ?? null } catch { return null }
+    },
     getCountryScreenPos(lat, lng) {
       const globe = globeRef.current
       if (!globe) return null
