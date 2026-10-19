@@ -18,6 +18,7 @@ import hashlib
 import json
 import logging
 import time
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -42,6 +43,12 @@ _ACTIVE_REFRESH_INTERVAL = timedelta(hours=1)
 # Max concurrent /markets requests during a series probe. Kept modest to
 # stay well under Kalshi's rate limit even when probing all ~6k series.
 _PROBE_CONCURRENCY = 20
+
+# Attempts per series when Kalshi answers 429, honouring Retry-After between
+# them. A probe that still fails is reported as failed (None), not as "no open
+# markets" — the latter would drop the series from the active set until the
+# next hourly sweep.
+_PROBE_MAX_ATTEMPTS = 3
 
 # Fields of the /markets payload that describe how a contract settles, as
 # opposed to how it is currently priced. Captured because misreading the
@@ -74,15 +81,25 @@ except ImportError:
     logger.warning("cryptography not installed; Kalshi auth disabled")
 
 
+# (pem, parsed key) — parsing an RSA PEM takes ~42 ms, and it used to run on
+# every request: ~2 minutes per 15-minute poll, all of it on the event loop,
+# starving every other scheduled job. Keyed on the PEM so a changed key in
+# config is still picked up.
+_key_cache: tuple[str, Any] | None = None
+
+
 def _load_private_key():
     """Load RSA private key from KALSHI_PRIVATE_KEY environment variable (PEM content)."""
+    global _key_cache
     if not _CRYPTO_AVAILABLE:
         return None
     pem = config.KALSHI_PRIVATE_KEY
     if not pem:
         logger.warning("KALSHI_PRIVATE_KEY env var not set; Kalshi auth disabled")
         return None
-    return serialization.load_pem_private_key(pem.encode(), password=None)
+    if _key_cache is None or _key_cache[0] != pem:
+        _key_cache = (pem, serialization.load_pem_private_key(pem.encode(), password=None))
+    return _key_cache[1]
 
 
 def _build_auth_headers(method: str, path: str) -> dict[str, str]:
@@ -134,6 +151,9 @@ class KalshiIngestor(BaseIngestor):
         self._active_series: set[str] = set()
         self._active_refreshed_at: datetime | None = None
 
+        # Per-poll request outcomes, logged once at the end of fetch().
+        self._probe_stats: Counter[str] = Counter()
+
         # ticker -> fingerprint of the settlement terms last written for it.
         # Seeded lazily from the store so a restart doesn't re-emit terms for
         # every contract already on disk. None means "not loaded yet".
@@ -175,27 +195,40 @@ class KalshiIngestor(BaseIngestor):
 
     async def _probe_series(
         self, client: httpx.AsyncClient, series_ticker: str, sem: asyncio.Semaphore
-    ) -> list[dict]:
-        """Return currently open markets for one series (empty if none/error)."""
+    ) -> list[dict] | None:
+        """Return currently open markets for one series.
+
+        [] means the series has nothing open; None means the probe failed
+        (rate limited past _PROBE_MAX_ATTEMPTS, or an HTTP/transport error),
+        so callers can keep a series they can't currently see.
+        """
+        stats = self._probe_stats
         async with sem:
             path = "/markets"
-            headers = _build_auth_headers("GET", "/trade-api/v2" + path)
-            try:
-                resp = await client.get(
-                    config.KALSHI_BASE_URL + path,
-                    headers=headers,
-                    params={"series_ticker": series_ticker, "status": "open", "limit": 200},
-                )
-                if resp.status_code == 429:
-                    retry_after = int(resp.headers.get("Retry-After", 5))
-                    logger.debug("Kalshi rate limited on series=%s; sleeping %ds", series_ticker, retry_after)
-                    await asyncio.sleep(retry_after)
-                    return []
-                resp.raise_for_status()
-                return resp.json().get("markets", [])
-            except Exception as exc:
-                logger.debug("Kalshi series probe failed for %s: %s", series_ticker, exc)
-                return []
+            for attempt in range(1, _PROBE_MAX_ATTEMPTS + 1):
+                headers = _build_auth_headers("GET", "/trade-api/v2" + path)
+                stats["requests"] += 1
+                try:
+                    resp = await client.get(
+                        config.KALSHI_BASE_URL + path,
+                        headers=headers,
+                        params={"series_ticker": series_ticker, "status": "open", "limit": 200},
+                    )
+                    if resp.status_code == 429:
+                        stats["rate_limited"] += 1
+                        if attempt == _PROBE_MAX_ATTEMPTS:
+                            break
+                        retry_after = int(resp.headers.get("Retry-After", 5))
+                        logger.debug("Kalshi rate limited on series=%s; sleeping %ds", series_ticker, retry_after)
+                        await asyncio.sleep(retry_after)
+                        continue
+                    resp.raise_for_status()
+                    return resp.json().get("markets", [])
+                except Exception as exc:
+                    logger.debug("Kalshi series probe failed for %s: %s", series_ticker, exc)
+                    break
+            stats["failed"] += 1
+            return None
 
     async def _refresh_active_series(self, client: httpx.AsyncClient) -> dict[str, list[dict]]:
         """Probe every focused series for open markets.
@@ -209,7 +242,12 @@ class KalshiIngestor(BaseIngestor):
         tickers = list(self._series_category.keys())
         results = await asyncio.gather(*(self._probe_series(client, t, sem) for t in tickers))
         by_series = {t: markets for t, markets in zip(tickers, results) if markets}
-        self._active_series = set(by_series.keys())
+        # A failed probe says nothing about the series, so one that was active
+        # stays active rather than going unpolled until the next sweep.
+        self._active_series = set(by_series) | {
+            t for t, markets in zip(tickers, results)
+            if markets is None and t in self._active_series
+        }
         self._active_refreshed_at = self.utcnow()
         logger.info(
             "Kalshi active-series refresh: %d/%d focused series have open markets",
@@ -267,6 +305,9 @@ class KalshiIngestor(BaseIngestor):
     async def fetch(self) -> list[RawRecord]:
         raws: list[RawRecord] = []
         now = self.utcnow()
+        started = time.monotonic()
+        self._probe_stats = Counter()
+        full_sweep = False
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             if self._series_refreshed_at is None or now - self._series_refreshed_at > _SERIES_REFRESH_INTERVAL:
@@ -277,15 +318,17 @@ class KalshiIngestor(BaseIngestor):
                 return raws
 
             if self._active_refreshed_at is None or now - self._active_refreshed_at > _ACTIVE_REFRESH_INTERVAL:
+                full_sweep = True
                 by_series = await self._refresh_active_series(client)
             else:
                 sem = asyncio.Semaphore(_PROBE_CONCURRENCY)
                 tickers = list(self._active_series)
                 results = await asyncio.gather(*(self._probe_series(client, t, sem) for t in tickers))
-                by_series = dict(zip(tickers, results))
                 # Markets close between polls — drop series with nothing open
                 # this cycle so the next fast poll doesn't keep probing them.
-                self._active_series = {t for t, markets in by_series.items() if markets}
+                # A failed probe (None) keeps its series for the next poll.
+                self._active_series = {t for t, markets in zip(tickers, results) if markets is None or markets}
+                by_series = {t: markets for t, markets in zip(tickers, results) if markets}
 
             terms_seen = self._ensure_terms_seen()
             for series_ticker, markets in by_series.items():
@@ -314,6 +357,13 @@ class KalshiIngestor(BaseIngestor):
                         )
                     )
 
+        st = self._probe_stats
+        logger.info(
+            "Kalshi %s poll: %d markets from %d requests in %.0fs "
+            "(%d rate-limited responses, %d series failed)",
+            "full" if full_sweep else "fast", len(raws), st["requests"],
+            time.monotonic() - started, st["rate_limited"], st["failed"],
+        )
         self._warn_if_prices_look_dead(raws)
         return raws
 
