@@ -49,7 +49,13 @@ class ExoScheduler:
     def __init__(self, store: FeatureStore | None = None, exclude_jobs: set[str] = frozenset()) -> None:
         self.store = store or FeatureStore()
         self.bus = get_bus()
-        self._scheduler = AsyncIOScheduler()
+        # A job that starts a few seconds late (the event loop was busy with
+        # another job) must still run: APScheduler's default 1s grace silently
+        # dropped about a quarter of GDELT cycles while Kalshi was processing.
+        # coalesce collapses a backlog of missed runs into one.
+        self._scheduler = AsyncIOScheduler(
+            job_defaults={"misfire_grace_time": 300, "coalesce": True}
+        )
         self._exclude_jobs = exclude_jobs
         # Populated as jobs are skipped in _add_ingestor_job — a source this
         # deployment never ingests will never have fresh data, so alerting on
