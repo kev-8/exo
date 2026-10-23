@@ -269,11 +269,11 @@ class DimensionScorer:
         )
         if secondary_rec:
             s_scores.append(_safe(secondary_rec.value))
-            sanctioned_b = secondary_rec.metadata.get("sanctioned_weighted_usd", 0) / 1e9
+            sanctioned_b = secondary_rec.metadata.get("sanctioned_usd", 0) / 1e9
             s_signals.append(
                 f"secondary_exposure={secondary_rec.value:.3f}"
-                f" (sanctioned_weighted=${sanctioned_b:.1f}B"
-                f" n={secondary_rec.metadata.get('n_sanctioned_partners', '?')})"
+                f" (sanctioned=${sanctioned_b:.1f}B"
+                f" pct={secondary_rec.metadata.get('sanctioned_pct', 0):.1%})"
             )
 
         # Short-term: OFAC SDN entity count (reflects active US enforcement attention)

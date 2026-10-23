@@ -185,7 +185,7 @@ class TestSanctionsRisk:
 
     def test_secondary_exposure_in_structural_tier(self, scorer, store):
         _write(store, "wits", "CN", "secondary_exposure", 0.35,
-               metadata={"sanctioned_weighted_usd": 1.5e11, "world_total_usd": 4e12, "n_sanctioned_partners": 3})
+               metadata={"sanctioned_usd": 1.5e11, "sanctioned_pct": 0.0375, "world_total_usd": 4e12})
         dim = scorer.sanctions_risk("CN", _now())
         assert any("secondary_exposure" in s for s in dim.tier_scores["structural"].contributing_signals)
 
@@ -199,7 +199,7 @@ class TestSanctionsRisk:
         _write(store, "wits", "IR", "trade_concentration", 0.5,
                metadata={"us_pct": 0.2, "eu_pct": 0.3, "world_total_usd": 1e11})
         _write(store, "wits", "IR", "secondary_exposure", 0.4,
-               metadata={"sanctioned_weighted_usd": 4e10, "world_total_usd": 1e11, "n_sanctioned_partners": 2})
+               metadata={"sanctioned_usd": 4e10, "sanctioned_pct": 0.4, "world_total_usd": 1e11})
         _write(store, "ofac", "IR", "sdn_entity_count", 0.7,
                metadata={"raw_count": 1500, "rolling_max": 3200.0})
         _write(store, "gdelt", "IR", "news_sentiment", 0.6)

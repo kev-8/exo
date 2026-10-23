@@ -106,11 +106,6 @@ DIMENSION_TIER_WEIGHTS: dict[str, dict[str, float]] = {
     "economic_stress":       {"structural": 0.3, "short_term": 0.4, "acute": 0.3},
 }
 
-# Minimum normalised SDN score for a country to be included as a bilateral
-# trade partner in the WITS secondary_exposure query. Derived from OFAC data
-# at fetch() time — no hardcoded sanctioned-country list.
-SDN_BILATERAL_THRESHOLD: float = float(os.getenv("SDN_BILATERAL_THRESHOLD", "0.05"))
-
 # ---------------------------------------------------------------------------
 # Validation benchmarks
 # ---------------------------------------------------------------------------

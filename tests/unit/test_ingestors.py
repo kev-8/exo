@@ -265,7 +265,7 @@ class TestWITSNormalise:
             "eu_total":      200_000_000_000.0,
         })
         records = ingestor.normalise(raw)
-        assert len(records) == 1
+        assert [r.signal_type for r in records] == ["trade_concentration", "secondary_exposure"]
         assert abs(records[0].value - 0.5) < 1e-6
 
     def test_concentration_capped_at_one(self, ingestor):
@@ -299,6 +299,76 @@ class TestWITSNormalise:
         records = ingestor.normalise(raw)
         assert records[0].signal_type == "trade_concentration"
         assert records[0].source == "wits"
+
+
+class TestWITSFetchPartnerValues:
+    """Parsing of the SDMX-JSON trade response, against its real shape."""
+
+    @staticmethod
+    def _body(partners, years, series):
+        # series: {partner: {year: value_in_thousands}}
+        return {
+            "structure": {"dimensions": {
+                "series": [
+                    {"id": "FREQ", "values": [{"id": "A"}]},
+                    {"id": "REPORTER", "values": [{"id": "USA"}]},
+                    {"id": "PARTNER", "values": [{"id": p} for p in partners]},
+                    {"id": "PRODUCTCODE", "values": [{"id": "Total"}]},
+                    {"id": "INDICATOR", "values": [{"id": "XPRT-TRD-VL"}]},
+                ],
+                "observation": [{"id": "TIME_PERIOD", "values": [{"id": str(y)} for y in years]}],
+            }},
+            "dataSets": [{"series": {
+                f"0:0:{partners.index(p)}:0:0": {
+                    "observations": {str(years.index(y)): [v, 0] for y, v in obs.items()},
+                }
+                for p, obs in series.items()
+            }}],
+        }
+
+    def _client(self, *bodies):
+        from unittest.mock import AsyncMock, MagicMock
+        resps = []
+        for body in bodies:
+            resp = MagicMock(status_code=200)
+            resp.json.return_value = body
+            resps.append(resp)
+        client = AsyncMock()
+        client.get.side_effect = resps
+        return client
+
+    @pytest.mark.asyncio
+    async def test_partners_read_at_worlds_latest_year_in_usd(self):
+        from exo.ingestion.wits import _fetch_partner_values
+        body = self._body(["WLD", "DEU", "FRA"], [2022, 2023], {
+            "WLD": {2022: 900.0, 2023: 1000.0},
+            "DEU": {2022: 50.0, 2023: 60.0},
+            "FRA": {2022: 40.0},  # no 2023 flow: left out, not mixed in from 2022
+        })
+        year, values = await _fetch_partner_values(
+            self._client(body), "USA", ["DEU", "FRA"], "XPRT-TRD-VL", 2020,
+        )
+        assert year == 2023
+        assert values == {"WLD": 1_000_000.0, "DEU": 60_000.0}
+
+    @pytest.mark.asyncio
+    async def test_partners_split_across_requests(self):
+        from exo.ingestion import wits
+        partners = [f"P{i:02d}" for i in range(wits._MAX_PARTNERS + 5)]
+        first = self._body(["WLD", "P00"], [2023], {"WLD": {2023: 1.0}, "P00": {2023: 2.0}})
+        second = self._body(["WLD", "P44"], [2023], {"WLD": {2023: 1.0}, "P44": {2023: 3.0}})
+        client = self._client(first, second)
+        _, values = await wits._fetch_partner_values(client, "USA", partners, "XPRT-TRD-VL", 2020)
+        assert client.get.call_count == 2
+        assert values["P00"] == 2000.0 and values["P44"] == 3000.0
+
+    @pytest.mark.asyncio
+    async def test_no_world_total_is_none(self):
+        from unittest.mock import AsyncMock, MagicMock
+        from exo.ingestion.wits import _fetch_partner_values
+        client = AsyncMock()
+        client.get.return_value = MagicMock(status_code=404)
+        assert await _fetch_partner_values(client, "PRK", ["USA"], "XPRT-TRD-VL", 2020) is None
 
 
 # ---------------------------------------------------------------------------
@@ -432,67 +502,55 @@ class TestWITSSecondaryExposure:
         from exo.ingestion.wits import WITSIngestor
         return WITSIngestor.__new__(WITSIngestor)
 
-    def test_secondary_exposure_emitted_when_present(self, ingestor):
-        raw = _raw("wits", "CN", {
-            "world_total": 5e12,
-            "us_total": 0.8e12,
-            "eu_total": 0.5e12,
-            "sanctioned_weighted": 0.3e12,
-            "n_sanctioned_partners": 2,
-        })
-        records = ingestor.normalise(raw)
-        signal_types = {r.signal_type for r in records}
-        assert "trade_concentration" in signal_types
-        assert "secondary_exposure" in signal_types
+    @staticmethod
+    def _secondary(records):
+        return next(r for r in records if r.signal_type == "secondary_exposure")
 
-    def test_secondary_exposure_not_emitted_when_zero(self, ingestor):
-        raw = _raw("wits", "US", {
-            "world_total": 5e12,
-            "us_total": 0.0,
-            "eu_total": 0.5e12,
-            "sanctioned_weighted": 0.0,
-            "n_sanctioned_partners": 0,
-        })
-        records = ingestor.normalise(raw)
-        assert all(r.signal_type != "secondary_exposure" for r in records)
-
-    def test_secondary_exposure_value(self, ingestor):
-        # sanctioned_weighted = 0.5e12 * 0.8 (sdn_score baked in)
-        # world = 5e12 → secondary = 0.4e12 / 5e12 = 0.08
+    def test_share_scaled_to_saturation(self, ingestor):
+        from exo.ingestion.wits import SECONDARY_SATURATION
+        # 5% of trade with sanctioned partners
         raw = _raw("wits", "IN", {
-            "world_total": 5e12,
-            "us_total": 1e12,
-            "eu_total": 0.5e12,
-            "sanctioned_weighted": 0.4e12,
-            "n_sanctioned_partners": 3,
+            "world_total": 1e12, "us_total": 0.1e12, "eu_total": 0.1e12,
+            "sanctioned_total": 0.05e12,
         })
-        records = ingestor.normalise(raw)
-        sec = next(r for r in records if r.signal_type == "secondary_exposure")
-        assert abs(sec.value - 0.08) < 1e-6
+        sec = self._secondary(ingestor.normalise(raw))
+        assert sec.value == pytest.approx(0.05 / SECONDARY_SATURATION)
+        assert sec.metadata["sanctioned_pct"] == pytest.approx(0.05)
 
-    def test_secondary_exposure_capped_at_one(self, ingestor):
-        raw = _raw("wits", "RU", {
-            "world_total": 1e12,
-            "us_total": 0.0,
-            "eu_total": 0.0,
-            "sanctioned_weighted": 2e12,  # exceeds world total
-            "n_sanctioned_partners": 5,
+    def test_zero_sanctioned_trade_is_a_zero_record(self, ingestor):
+        raw = _raw("wits", "CL", {
+            "world_total": 1e11, "us_total": 0.0, "eu_total": 0.0, "sanctioned_total": 0.0,
         })
-        records = ingestor.normalise(raw)
-        sec = next(r for r in records if r.signal_type == "secondary_exposure")
-        assert sec.value == 1.0
+        assert self._secondary(ingestor.normalise(raw)).value == 0.0
 
-    def test_secondary_exposure_metadata(self, ingestor):
-        raw = _raw("wits", "PK", {
-            "world_total": 1e12,
-            "us_total": 0.1e12,
-            "eu_total": 0.1e12,
-            "sanctioned_weighted": 0.2e12,
-            "n_sanctioned_partners": 2,
+    def test_capped_at_one(self, ingestor):
+        raw = _raw("wits", "BY", {
+            "world_total": 1e11, "us_total": 0.0, "eu_total": 0.0, "sanctioned_total": 0.6e11,
         })
-        records = ingestor.normalise(raw)
-        sec = next(r for r in records if r.signal_type == "secondary_exposure")
-        assert sec.metadata["n_sanctioned_partners"] == 2
+        assert self._secondary(ingestor.normalise(raw)).value == 1.0
+
+    def test_partner_set_is_by_programme(self):
+        from exo.ingestion.wits import SANCTIONED_PARTNERS
+        assert {"RUS", "IRN", "PRK"} <= set(SANCTIONED_PARTNERS)
+        # SDN-dense but not under a country programme
+        assert not {"ARE", "MEX", "GBR", "USA"} & set(SANCTIONED_PARTNERS)
+
+
+class TestWITSOwnBlocExcluded:
+    @pytest.fixture
+    def ingestor(self):
+        from exo.ingestion.wits import WITSIngestor
+        return WITSIngestor.__new__(WITSIngestor)
+
+    def test_eu_member_counts_only_us(self, ingestor):
+        raw = _raw("wits", "DE", {"world_total": 1000.0, "us_total": 90.0, "eu_total": 510.0})
+        rec = ingestor.normalise(raw)[0]
+        assert rec.value == pytest.approx(0.09)
+        assert rec.metadata["eu_pct"] == 0.0
+
+    def test_us_counts_only_eu(self, ingestor):
+        raw = _raw("wits", "US", {"world_total": 1000.0, "us_total": 0.0, "eu_total": 180.0})
+        assert ingestor.normalise(raw)[0].value == pytest.approx(0.18)
 
 
 class TestUCDPCandidateNormalise:
@@ -522,3 +580,46 @@ class TestUCDPCandidateNormalise:
         raw = _raw("ucdp_candidate", "PK", {"event_count": 20, "total_fatalities": 0})
         records = ingestor.normalise(raw)
         assert all(r.source == "ucdp_candidate" for r in records)
+
+
+class TestUCDPSeedMissing:
+    @pytest.fixture
+    def store(self, tmp_path):
+        from exo.store.feature_store import FeatureStore
+        return FeatureStore(data_dir=tmp_path / "features", redis_url=None)
+
+    @pytest.fixture
+    def seed_file(self, tmp_path):
+        import json
+        path = tmp_path / "seed.json"
+        path.write_text(json.dumps([
+            {"source": "ucdp_ged", "entity": "JP", "signal_type": "ucdp_ged_events",
+             "value": 0.0, "metadata": {"raw_event_count": 0.0}},
+            {"source": "ucdp_ged", "entity": "UA", "signal_type": "ucdp_ged_events",
+             "value": 0.9, "metadata": {"raw_event_count": 9000.0}},
+        ]))
+        return path
+
+    def test_writes_only_missing_records(self, store, seed_file):
+        from exo.ingestion.ucdp import seed_missing
+        from exo.models import FeatureRecord
+        store.write(FeatureRecord(source="ucdp_ged", entity="UA", signal_type="ucdp_ged_events",
+                                  value=0.95, metadata={}, as_of_ts=_now()))
+        assert seed_missing(store, seed_file) == 1
+        assert store.get_latest(entity="JP", signal_type="ucdp_ged_events", source="ucdp_ged").value == 0.0
+        # The live value isn't overwritten by the older seed
+        assert store.get_latest(entity="UA", signal_type="ucdp_ged_events", source="ucdp_ged").value == 0.95
+
+    def test_second_run_is_a_no_op(self, store, seed_file):
+        from exo.ingestion.ucdp import seed_missing
+        assert seed_missing(store, seed_file) == 2
+        assert seed_missing(store, seed_file) == 0
+
+    def test_committed_seed_covers_tracked_countries(self):
+        import json
+        from exo.ingestion.ucdp import NO_COVERAGE, SEED_FILE
+        from exo.risk_index.engine import COUNTRIES
+        rows = json.loads(SEED_FILE.read_text())
+        for signal in ("ucdp_ged_events", "ucdp_ged_fatalities", "ucdp_candidate_events"):
+            seeded = {r["entity"] for r in rows if r["signal_type"] == signal}
+            assert seeded == set(COUNTRIES) - NO_COVERAGE, signal
