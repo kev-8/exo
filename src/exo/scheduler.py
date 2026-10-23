@@ -185,9 +185,12 @@ class ExoScheduler:
         self._add_ingestor_job(self.ofac, "ofac_ingest",
                                trigger=CronTrigger(day_of_week="mon", hour=7, minute=0, timezone="UTC"))
 
-        # WITS trade concentration + secondary exposure — weekly Monday 07:30 UTC
+        # WITS trade concentration, secondary exposure and top export partners
+        # (the trade panel) — weekly Monday 07:30 UTC, and at startup while the
+        # store holds no WITS data. ~7 min a run.
         self._add_ingestor_job(self.wits, "wits_ingest",
-                               trigger=CronTrigger(day_of_week="mon", hour=7, minute=30, timezone="UTC"))
+                               trigger=CronTrigger(day_of_week="mon", hour=7, minute=30, timezone="UTC"),
+                               **self._run_now_if_empty(self.wits.source))
 
         # AI exposure sources below also run at startup while the store holds
         # nothing for them, so a fresh deploy fills them the same day.

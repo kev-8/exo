@@ -18,6 +18,7 @@ const WORLD_COORDS = {
   FI: [64.0, 26.0],   SE: [60.1, 18.6],   NO: [60.5, 8.5],    DK: [56.3, 9.5],
   HK: [22.4, 114.1],  TZ: [-6.4, 34.9],   ET: [9.1, 40.5],    GH: [7.9, -1.0],
   CI: [7.5, -5.5],    CM: [3.9, 11.5],    UG: [1.4, 32.3],    SD: [12.9, 30.2],
+  IE: [53.4, -8.2],   IQ: [33.2, 43.7],   MZ: [-18.7, 35.5],
 }
 
 // globe.gl's default camera vertical FOV. Horizontal FOV is derived from it by

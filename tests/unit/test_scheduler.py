@@ -39,6 +39,7 @@ async def test_ai_sources_run_at_startup_only_when_empty(tmp_path):
         # Empty sources fire now; comtrade already has data, so it waits for its cron.
         assert sched._scheduler.get_job("digital_infra_ingest").next_run_time < soon
         assert sched._scheduler.get_job("export_controls_ingest").next_run_time < soon
+        assert sched._scheduler.get_job("wits_ingest").next_run_time < soon
         assert sched._scheduler.get_job("comtrade_ingest").next_run_time > soon
     finally:
         sched._scheduler.shutdown(wait=False)

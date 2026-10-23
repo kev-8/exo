@@ -17,7 +17,12 @@ export default function TradePanel({ tradeData, loading }) {
 
   return (
     <div>
-      <div className="font-display text-xs tracking-[0.2em] text-slate-200 mb-6">TOP EXPORT PARTNERS</div>
+      <div className="flex items-baseline justify-between gap-3 mb-6">
+        <div className="font-display text-xs tracking-[0.2em] text-slate-200">TOP EXPORT PARTNERS</div>
+        {tradeData.source === 'wits' && tradeData.year && (
+          <div className="font-mono text-[10px] text-slate-500">WITS · {tradeData.year}</div>
+        )}
+      </div>
       <div className="space-y-5">
         {tradeData.partners.map((p, i) => (
           <motion.div
