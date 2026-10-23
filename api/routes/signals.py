@@ -5,17 +5,36 @@ from __future__ import annotations
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from exo.models import FeatureQuery
 from exo.store.feature_store import FeatureStore
 
 router = APIRouter()
 _store = FeatureStore()
 
-# Sources that store records keyed by ISO2 entity (e.g. entity="RU").
-# Excludes google_trends (topic strings), eia (HH/WTI), kalshi (tickers),
-# and finnhub (category names) — those never match an ISO2 entity filter
-# and loading their partitions for every request is wasteful.
-_ISO2_SOURCES = ["gdelt", "world_bank", "fred"]
+# Country-level signals shown in the feed, by source. Read with get_latest
+# (Redis first, then newest partition), so every signal appears once with its
+# latest value. Sources keyed by something other than a country (google_trends
+# topics, eia benchmarks, kalshi tickers, finnhub categories) aren't listed.
+FEED_SIGNALS: dict[str, tuple[str, ...]] = {
+    "gdelt": ("news_sentiment", "news_magnitude"),
+    "world_bank": (
+        "gdp_growth", "inflation_rate", "unemployment_rate", "debt_to_gdp", "gross_savings",
+        "energy_imports_pct", "trade_openness", "exports_pct_gdp", "imports_pct_gdp",
+        "electricity_access",
+    ),
+    "fred": (   # US only
+        "economic_indicator", "fred_unrate", "fred_cpiaucsl", "fred_fedfunds",
+        "fred_t10y2y", "fred_umcsent",
+    ),
+    "wgi": ("political_stability", "voice_accountability", "rule_of_law", "control_of_corruption"),
+    "unga_votes": ("ideal_point_variance",),
+    "ofac": ("sdn_entity_count",),
+    "wits": ("trade_concentration", "secondary_exposure"),
+    "ucdp_ged": ("ucdp_ged_events", "ucdp_ged_fatalities"),
+    "ucdp_candidate": ("ucdp_candidate_events",),
+    "comtrade": ("hw_contested_share", "supplier_chokepoint", "cn_mineral_dependence"),
+    "export_controls": ("entity_list_count", "jp_eul_count", "cn_ec_count"),
+    "digital_infra": ("cables_in_service", "ixp_count", "facility_count"),
+}
 
 
 class SignalResponse(BaseModel):
@@ -29,39 +48,27 @@ class SignalResponse(BaseModel):
 @router.get("/signals/{iso2}", response_model=list[SignalResponse])
 def get_latest_signals(
     iso2: str,
-    limit: int = Query(default=10, ge=1, le=50),
+    limit: int = Query(default=40, ge=1, le=60),
 ):
-    """Most recent feature records for *iso2* across all country-level sources."""
+    """Latest value of each country-level signal for *iso2*, newest first."""
     iso2 = iso2.upper()
-
-    # Query each source individually so we hit a specific partition glob
-    # (source=gdelt/date=*/...) rather than the expensive source=* scan.
-    all_records = []
-    for source in _ISO2_SOURCES:
-        # fred only carries US data; skip for other countries
+    records = []
+    for source, signal_types in FEED_SIGNALS.items():
         if source == "fred" and iso2 != "US":
             continue
-        records = _store.read(FeatureQuery(entity=iso2, source=source, limit=limit))
-        all_records.extend(records)
+        for signal_type in signal_types:
+            rec = _store.get_latest(entity=iso2, signal_type=signal_type, source=source)
+            if rec is not None:
+                records.append(rec)
 
-    # Sort by as_of_ts descending, deduplicate by (source, signal_type), cap at limit
-    seen: set[tuple[str, str]] = set()
-    results = []
-    for r in sorted(all_records, key=lambda x: x.as_of_ts, reverse=True):
-        key = (r.source, r.signal_type)
-        if key in seen:
-            continue
-        seen.add(key)
-        results.append(
-            SignalResponse(
-                source=r.source,
-                signal_type=r.signal_type,
-                value=round(r.value, 4),
-                as_of_ts=r.as_of_ts.isoformat(),
-                metadata=r.metadata,
-            )
+    records.sort(key=lambda r: r.as_of_ts, reverse=True)
+    return [
+        SignalResponse(
+            source=r.source,
+            signal_type=r.signal_type,
+            value=round(r.value, 4),
+            as_of_ts=r.as_of_ts.isoformat(),
+            metadata=r.metadata,
         )
-        if len(results) >= limit:
-            break
-
-    return results
+        for r in records[:limit]
+    ]
