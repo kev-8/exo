@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n API,UI -c cyan,magenta \"bash -c 'source /Users/kevin/Desktop/ds/environments/exo_env/bin/activate && cd /Users/kevin/Desktop/ds/exo && uvicorn api.app:app --host 0.0.0.0 --port 8000'\" \"vite\"",
+    "dev": "concurrently -n API,UI -c cyan,magenta \"bash -c 'source /Users/kevin/Desktop/ds/environments/exo_env/bin/activate && cd /Users/kevin/Desktop/ds/exo && DATA_DIR=/Users/kevin/Desktop/ds/exo/data EXO_DISABLE_SCHEDULER=1 uvicorn api.app:app --host 0.0.0.0 --port 8000'\" \"vite\"",
     "ui": "vite",
     "build": "vite build",
     "lint": "eslint .",
