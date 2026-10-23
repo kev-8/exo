@@ -231,6 +231,13 @@ class ExoScheduler:
             trigger=IntervalTrigger(minutes=5),
         )
 
+        # AI exposure stability (rollback trigger) — weekly Monday 12:00 UTC,
+        # after the Monday ingests and a risk update have landed.
+        self._scheduler.add_job(
+            self._ai_stability_check, id="ai_stability_check",
+            trigger=CronTrigger(day_of_week="mon", hour=12, minute=0, timezone="UTC"),
+        )
+
         logger.info("All jobs registered with scheduler")
 
     # ------------------------------------------------------------------
@@ -241,6 +248,23 @@ class ExoScheduler:
         logger.info("Risk index update triggered")
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self.risk_index.update_all)
+
+    async def _ai_stability_check(self) -> None:
+        from exo.risk_index.validation import AI_JUMP_THRESHOLD, ai_exposure_jumps
+
+        loop = asyncio.get_event_loop()
+        jumps = await loop.run_in_executor(
+            None, ai_exposure_jumps, self.risk_index.index_store, COUNTRIES,
+        )
+        if not jumps:
+            logger.info("AI exposure stable: no country moved > %.2f in 7 days", AI_JUMP_THRESHOLD)
+        for country, j in jumps.items():
+            logger.warning(
+                "AI exposure jump %s: %.3f -> %.3f in 7 days (rollback trigger > %.2f). "
+                "Before: %s | After: %s",
+                country, j["before"], j["after"], AI_JUMP_THRESHOLD,
+                j["signals_before"], j["signals_after"],
+            )
 
     async def _staleness_check(self) -> None:
         loop = asyncio.get_event_loop()

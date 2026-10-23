@@ -66,7 +66,7 @@ function liveRisk(snap) {
   const dims = [...snap.dimensions]
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
-    .map(d => ({ name: d.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), score: d.score }))
+    .map(d => ({ name: d.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).replace(/^Ai\b/, 'AI'), score: d.score }))
   return {
     composite:  snap.composite_score,
     structural: snap.structural_score,

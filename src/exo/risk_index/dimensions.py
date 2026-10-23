@@ -1,4 +1,4 @@
-"""Five-dimension risk scoring per country — three-tier architecture.
+"""Six-dimension risk scoring per country — three-tier architecture.
 
 Each dimension is scored across three time-horizon tiers:
 
@@ -9,17 +9,20 @@ Each dimension is scored across three time-horizon tiers:
 Tier sub-scores blend into the dimension score via DIMENSION_TIER_WEIGHTS.
 If a tier has no data its TierScore defaults to 0.5 (neutral).
 
-Dimensions and weights:
+Dimensions and weights (config.DIMENSION_WEIGHTS; the first five are these
+base weights scaled by 1 - AI_EXPOSURE_WEIGHT):
   1. political_stability   (0.25): structural only — WGI PV.EST, VA.EST
   2. conflict_intensity    (0.25): all three tiers
   3. policy_predictability (0.20): structural only — UNGA ideal point variance
   4. sanctions_risk        (0.15): structural + acute
   5. economic_stress       (0.15): all three tiers
+  6. ai_exposure           (0.10): structural + short_term — see ai_exposure()
 """
 
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, timedelta, timezone
 
 from exo import config
@@ -82,6 +85,7 @@ class DimensionScorer:
             self.policy_predictability(country, now),
             self.sanctions_risk(country, now),
             self.economic_stress(country, now),
+            self.ai_exposure(country, now),
         ]
 
     # ------------------------------------------------------------------
@@ -439,4 +443,102 @@ class DimensionScorer:
             weight=config.DIMENSION_WEIGHTS["economic_stress"],
             contributing_signals=all_signals,
             tier_scores=tier_scores,
+        )
+
+    # ------------------------------------------------------------------
+    # 6. AI exposure (weight 0.10) — structural + short-term
+    # ------------------------------------------------------------------
+
+    def ai_exposure(self, country: str, now: datetime) -> DimensionScore:
+        """Exposure to AI supply-chain chokepoints and export controls.
+
+        structural = mean of the available components:
+          hardware   — mean(hw_contested_share, cn_mineral_dependence)
+          chokepoint — supplier_chokepoint
+          access     — mean(infrastructure scarcity, 1 - electricity access),
+                       infrastructure = mean of cable / IXP / facility scarcity
+        short_term = export controls: log1p(US EL + Japan EUL + w·China ECL/UEL)
+                     over log1p of the same sum of each list's largest count,
+                     w = AI_CN_LIST_WEIGHT.
+
+        A missing component is left out of the mean rather than set to 0.5,
+        and a missing tier out of the blend; coverage ("3/4") is stored in
+        metadata.
+        """
+        def latest(signal_type: str, source: str):
+            return self.store.get_latest(entity=country, signal_type=signal_type,
+                                         source=source, as_of_ts=now)
+
+        components: dict[str, float] = {}
+        signals: list[str] = []
+
+        hardware = []
+        for sig in ("hw_contested_share", "cn_mineral_dependence"):
+            rec = latest(sig, "comtrade")
+            if rec:
+                hardware.append(_safe(rec.value))
+                signals.append(f"{sig}={rec.value:.3f}")
+        if hardware:
+            components["hardware"] = _avg(hardware)
+
+        choke = latest("supplier_chokepoint", "comtrade")
+        if choke:
+            components["chokepoint"] = _safe(choke.value)
+            signals.append(f"supplier_chokepoint={choke.value:.3f}"
+                           f" ({choke.metadata.get('top_hs_code', '?')})")
+
+        access = []
+        infra = []
+        for sig in ("cables_in_service", "ixp_count", "facility_count"):
+            rec = latest(sig, "digital_infra")
+            if rec:
+                infra.append(_safe(rec.value))
+                signals.append(f"{sig}_scarcity={rec.value:.3f} (n={rec.metadata.get('raw_count', '?')})")
+        if infra:
+            access.append(_avg(infra))
+        elec = latest("electricity_access", "world_bank")
+        if elec:
+            access.append(max(0.0, min(1.0, 1.0 - _safe(elec.value, 100.0) / 100.0)))
+            signals.append(f"electricity_access={elec.value:.1f}%")
+        if access:
+            components["access"] = _avg(access)
+
+        lists = {sig: latest(sig, "export_controls")
+                 for sig in ("entity_list_count", "jp_eul_count", "cn_ec_count")}
+        if any(lists.values()):
+            weights = {"entity_list_count": 1.0, "jp_eul_count": 1.0,
+                       "cn_ec_count": config.AI_CN_LIST_WEIGHT}
+            total = ref = 0.0
+            for sig, rec in lists.items():
+                if rec:
+                    total += weights[sig] * rec.metadata.get("raw_count", 0)
+                    ref += weights[sig] * rec.metadata.get("list_max", 0)
+            components["export_controls"] = math.log1p(total) / math.log1p(ref) if ref else 0.0
+            signals.append("export_controls=" + "/".join(
+                f"{s.split('_')[0].upper()}{r.metadata.get('raw_count', 0) if r else '-'}"
+                for s, r in lists.items()))
+
+        structural = [components[c] for c in ("hardware", "chokepoint", "access") if c in components]
+        tier_scores: dict[str, TierScore] = {}
+        if structural:
+            tier_scores["structural"] = _tier_score("structural", structural, signals)
+        if "export_controls" in components:
+            tier_scores["short_term"] = _tier_score(
+                "short_term", [components["export_controls"]],
+                [s for s in signals if s.startswith("export_controls")])
+
+        tier_w = config.DIMENSION_TIER_WEIGHTS["ai_exposure"]
+        total_w = sum(tier_w[t] for t in tier_scores)
+        score = (round(sum(ts.score * tier_w[t] for t, ts in tier_scores.items()) / total_w, 4)
+                 if total_w else 0.5)
+        return DimensionScore(
+            name="ai_exposure",
+            score=score,
+            weight=config.DIMENSION_WEIGHTS["ai_exposure"],
+            contributing_signals=signals,
+            tier_scores=tier_scores,
+            metadata={
+                "coverage": f"{len(components)}/4",
+                "components": {k: round(v, 4) for k, v in components.items()},
+            },
         )

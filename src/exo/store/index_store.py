@@ -19,6 +19,16 @@ from exo.models import DimensionScore, RiskIndexSnapshot, TierScore
 logger = logging.getLogger(__name__)
 
 
+def _utc(ts: datetime) -> pd.Timestamp:
+    """A UTC Timestamp from a naive (assumed UTC) or aware datetime.
+
+    pd.Timestamp(aware, tz="UTC") raises in pandas 2+, which broke every
+    history request (the API passes an aware start_ts).
+    """
+    t = pd.Timestamp(ts)
+    return t.tz_localize("UTC") if t.tzinfo is None else t.tz_convert("UTC")
+
+
 class IndexStore:
     """Append-only store for :class:`~exo.models.RiskIndexSnapshot` objects.
 
@@ -50,6 +60,7 @@ class IndexStore:
                     tier: {"score": ts.score, "signals": ts.contributing_signals}
                     for tier, ts in d.tier_scores.items()
                 }),
+                "metadata": json.dumps(d.metadata),
             }
             for d in snapshot.dimensions
         ]
@@ -108,9 +119,9 @@ class IndexStore:
 
         df["as_of_ts"] = pd.to_datetime(df["as_of_ts"], utc=True)
         if start_ts:
-            df = df[df["as_of_ts"] >= pd.Timestamp(start_ts, tz="UTC")]
+            df = df[df["as_of_ts"] >= _utc(start_ts)]
         if end_ts:
-            df = df[df["as_of_ts"] <= pd.Timestamp(end_ts, tz="UTC")]
+            df = df[df["as_of_ts"] <= _utc(end_ts)]
 
         df = df.sort_values("as_of_ts", ascending=False).head(limit)
         snapshots = []
@@ -133,6 +144,7 @@ class IndexStore:
                     weight=d["weight"],
                     contributing_signals=json.loads(d["signals"]),
                     tier_scores=tier_scores,
+                    metadata=json.loads(d.get("metadata") or "{}"),
                 ))
 
             # Derive tier scores from dimension tier_scores when the columns

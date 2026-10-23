@@ -84,12 +84,24 @@ AI_MINERAL_BASELINE_YEAR: int = 2022
 # Risk index dimension weights
 # ---------------------------------------------------------------------------
 
-DIMENSION_WEIGHTS: dict[str, float] = {
+# AI exposure, the 6th dimension: promoted 2026-10-23 after the benchmark
+# check (V-Dem r 0.671 -> 0.703, Fragile States Index 0.768 -> 0.764). The other
+# five keep their relative weights and share the remaining 1 - AI_EXPOSURE_WEIGHT.
+# Rollback: set to 0.0. The score is still computed and stored, but adds nothing
+# to composite_score or the tier scores.
+AI_EXPOSURE_WEIGHT: float = 0.10
+
+_BASE_DIMENSION_WEIGHTS: dict[str, float] = {
     "political_stability": 0.25,
     "conflict_intensity": 0.25,
     "policy_predictability": 0.20,
     "sanctions_risk": 0.15,
     "economic_stress": 0.15,
+}
+
+DIMENSION_WEIGHTS: dict[str, float] = {
+    **{name: round(w * (1.0 - AI_EXPOSURE_WEIGHT), 6) for name, w in _BASE_DIMENSION_WEIGHTS.items()},
+    "ai_exposure": AI_EXPOSURE_WEIGHT,
 }
 
 # Weights used specifically when computing the top-level acute_score composite.
@@ -101,6 +113,7 @@ ACUTE_DIMENSION_WEIGHTS: dict[str, float] = {
     "policy_predictability": 0.05,
     "sanctions_risk":        0.15,
     "economic_stress":       0.15,
+    "ai_exposure":           0.0,   # has no acute tier
 }
 
 # Tier weights per dimension — controls how structural / short_term / acute
@@ -111,7 +124,11 @@ DIMENSION_TIER_WEIGHTS: dict[str, dict[str, float]] = {
     "policy_predictability": {"structural": 1.0, "short_term": 0.0, "acute": 0.0},
     "sanctions_risk":        {"structural": 0.4, "short_term": 0.2, "acute": 0.4},
     "economic_stress":       {"structural": 0.3, "short_term": 0.4, "acute": 0.3},
+    "ai_exposure":           {"structural": 0.6, "short_term": 0.4, "acute": 0.0},
 }
+
+# Weight of China's ECL/UEL entries against the US Entity List and Japan's EUL.
+AI_CN_LIST_WEIGHT: float = 0.5
 
 # ---------------------------------------------------------------------------
 # Validation benchmarks

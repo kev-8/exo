@@ -101,6 +101,7 @@ class DimensionScore:
     weight: float
     contributing_signals: list[str]
     tier_scores: dict[str, TierScore] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)   # e.g. overlay coverage
 
 
 @dataclass

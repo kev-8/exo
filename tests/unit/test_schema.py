@@ -115,3 +115,32 @@ class TestKalshiMarket:
             close_time=None,
         )
         assert market.yes_ask - market.yes_bid == pytest.approx(0.04)
+
+
+class TestDimensionMetadata:
+    def test_defaults_to_empty(self):
+        assert DimensionScore("economic_stress", 0.5, 0.15, []).metadata == {}
+
+    def test_round_trips_through_index_store(self, tmp_path):
+        from exo.store.index_store import IndexStore
+        store = IndexStore(data_dir=tmp_path / "idx")
+        now = datetime.now(timezone.utc)
+        dims = [
+            DimensionScore("economic_stress", 0.5, 1.0, []),
+            DimensionScore("ai_exposure", 0.6, 0.0, [], metadata={"overlay": True, "coverage": "3/4"}),
+        ]
+        store.write(RiskIndexSnapshot(country="KR", composite_score=0.5, dimensions=dims, as_of_ts=now))
+        got = {d.name: d.metadata for d in store.get_latest("KR").dimensions}
+        assert got == {"economic_stress": {}, "ai_exposure": {"overlay": True, "coverage": "3/4"}}
+
+
+def test_index_history_accepts_aware_and_naive_bounds(tmp_path):
+    from datetime import timedelta
+    from exo.store.index_store import IndexStore
+    store = IndexStore(data_dir=tmp_path / "idx")
+    now = datetime.now(timezone.utc)
+    store.write(RiskIndexSnapshot(country="KR", composite_score=0.5,
+                                  dimensions=[DimensionScore("economic_stress", 0.5, 1.0, [])], as_of_ts=now))
+    assert len(store.get_history("KR", start_ts=now - timedelta(days=1))) == 1        # aware (the API's)
+    assert len(store.get_history("KR", start_ts=(now - timedelta(days=1)).replace(tzinfo=None))) == 1
+    assert store.get_history("KR", end_ts=now - timedelta(days=1)) == []

@@ -30,6 +30,7 @@ class DimensionResponse(BaseModel):
     weight: float
     contributing_signals: list[str]
     tiers: dict[str, TierScoreResponse]
+    metadata: dict[str, Any] = {}
 
 
 class RiskSnapshotResponse(BaseModel):
@@ -61,6 +62,7 @@ def _serialise(snap) -> RiskSnapshotResponse:
                 )
                 for tier, ts in d.tier_scores.items()
             },
+            metadata=d.metadata,
         )
         for d in snap.dimensions
     ]

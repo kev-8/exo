@@ -49,13 +49,13 @@ class TestRiskIndexIsolation:
         engine.update("RU")
         snap = tmp_index.get_latest("RU")
         assert snap is not None
-        dimension_names = {d.name for d in snap.dimensions}
-        assert dimension_names == {
+        assert {d.name for d in snap.dimensions} == {
             "political_stability",
             "conflict_intensity",
             "policy_predictability",
             "sanctions_risk",
             "economic_stress",
+            "ai_exposure",
         }
 
     def test_dimension_scores_in_range(self, tmp_store, tmp_index):
@@ -119,7 +119,41 @@ class TestTierScores:
         engine.update("CN")
         snap = tmp_index.get_latest("CN")
         for dim in snap.dimensions:
+            if dim.name == "ai_exposure":
+                continue   # only has the tiers it has data for (never acute)
             assert set(dim.tier_scores.keys()) == {"structural", "short_term", "acute"}
+
+    def test_ai_weight_and_rollback(self, tmp_path, monkeypatch):
+        """At weight w the composite is (1-w)·(five-dimension composite) + w·AI;
+        at weight 0 (the rollback) AI data changes nothing."""
+        from exo import config
+
+        def snapshot(tag, with_ai):
+            store = FeatureStore(data_dir=tmp_path / f"f{tag}", redis_url=None)
+            index = IndexStore(data_dir=tmp_path / f"i{tag}")
+            self._write(store, "wgi", "TW", "political_stability", 0.7)
+            self._write(store, "ucdp_ged", "TW", "ucdp_ged_events", 0.1)
+            if with_ai:
+                for sig in ("hw_contested_share", "supplier_chokepoint", "cn_mineral_dependence"):
+                    self._write(store, "comtrade", "TW", sig, 0.9)
+                self._write(store, "export_controls", "TW", "cn_ec_count", 0.5,
+                            metadata={"raw_count": 8, "list_max": 88})
+            RiskIndexEngine(store=store, index_store=index).update("TW", as_of_ts=datetime.now(timezone.utc))
+            return index.get_latest("TW")
+
+        w = config.AI_EXPOSURE_WEIGHT
+        promoted = snapshot("p", True)
+        ai = next(d for d in promoted.dimensions if d.name == "ai_exposure")
+        assert ai.weight == w > 0 and ai.metadata["coverage"] == "3/4"
+
+        base = {k: v for k, v in config.DIMENSION_WEIGHTS.items() if k != "ai_exposure"}
+        monkeypatch.setattr(config, "DIMENSION_WEIGHTS",
+                            {**{k: v / (1 - w) for k, v in base.items()}, "ai_exposure": 0.0})
+        rolled_with, rolled_without = snapshot("r1", True), snapshot("r0", False)
+        for field in ("composite_score", "structural_score", "short_term_score", "acute_score"):
+            assert getattr(rolled_with, field) == getattr(rolled_without, field), field
+        assert promoted.composite_score == pytest.approx(
+            (1 - w) * rolled_with.composite_score + w * ai.score, abs=1e-3)
 
     def test_structural_signal_shifts_structural_score(self, tmp_store, tmp_index):
         # Write a high WGI political stability signal (well governed → low instability)

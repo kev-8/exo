@@ -9,6 +9,7 @@ const DIMENSION_LABELS = {
   policy_predictability:  'Policy Predictability',
   sanctions_risk:         'Sanctions Risk',
   economic_stress:        'Economic Stress',
+  ai_exposure:            'AI Exposure',
 }
 
 const TIER_LABELS = {

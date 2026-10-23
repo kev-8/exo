@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import pytest
 
+from exo import config
 from exo.models import FeatureRecord, TierScore
 from exo.risk_index.dimensions import DimensionScorer
 from exo.store.feature_store import FeatureStore
@@ -43,7 +44,7 @@ class TestPoliticalStability:
         dim = scorer.political_stability("XX", _now())
         assert dim.score == 0.5
         assert dim.name == "political_stability"
-        assert dim.weight == 0.25
+        assert dim.weight == config.DIMENSION_WEIGHTS["political_stability"]
 
     def test_wgi_political_stability_inverted(self, scorer, store):
         # WGI=1.0 (well-governed) → instability = 1 - 1.0 = 0.0
@@ -86,7 +87,7 @@ class TestConflictIntensity:
 
     def test_weight(self, scorer):
         dim = scorer.conflict_intensity("XX", _now())
-        assert dim.weight == 0.25
+        assert dim.weight == config.DIMENSION_WEIGHTS["conflict_intensity"]
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +114,7 @@ class TestPolicyPredictability:
 
     def test_weight(self, scorer):
         dim = scorer.policy_predictability("XX", _now())
-        assert dim.weight == 0.20
+        assert dim.weight == config.DIMENSION_WEIGHTS["policy_predictability"]
 
     def test_contributing_signals_include_metadata(self, scorer, store):
         _write(store, "unga_votes", "IN", "ideal_point_variance", 0.046,
@@ -208,7 +209,7 @@ class TestSanctionsRisk:
 
     def test_weight(self, scorer):
         dim = scorer.sanctions_risk("XX", _now())
-        assert dim.weight == 0.15
+        assert dim.weight == config.DIMENSION_WEIGHTS["sanctions_risk"]
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +255,7 @@ class TestEconomicStress:
 
     def test_weight(self, scorer):
         dim = scorer.economic_stress("XX", _now())
-        assert dim.weight == 0.15
+        assert dim.weight == config.DIMENSION_WEIGHTS["economic_stress"]
 
 
 # ---------------------------------------------------------------------------
@@ -266,13 +267,20 @@ class TestCompositeWeights:
         dims = scorer.score_all("XX", _now())
         assert abs(sum(d.weight for d in dims) - 1.0) < 1e-6
 
-    def test_all_five_dimensions_returned(self, scorer):
+    def test_all_six_dimensions_returned(self, scorer):
         dims = scorer.score_all("XX", _now())
         names = {d.name for d in dims}
         assert names == {
             "political_stability", "conflict_intensity", "policy_predictability",
-            "sanctions_risk", "economic_stress",
+            "sanctions_risk", "economic_stress", "ai_exposure",
         }
+
+    def test_ai_weight_scales_the_other_five(self):
+        # The five keep their relative weights (0.25:0.25:0.20:0.15:0.15).
+        w = config.DIMENSION_WEIGHTS
+        assert w["ai_exposure"] == config.AI_EXPOSURE_WEIGHT
+        assert w["political_stability"] == pytest.approx(0.25 * (1 - config.AI_EXPOSURE_WEIGHT))
+        assert w["sanctions_risk"] / w["policy_predictability"] == pytest.approx(0.75)
 
     def test_all_scores_in_range(self, scorer, store):
         _write(store, "wgi", "IL", "political_stability", 0.4)
@@ -283,3 +291,52 @@ class TestCompositeWeights:
         dims = scorer.score_all("IL", _now())
         for d in dims:
             assert 0.0 <= d.score <= 1.0, f"{d.name}: {d.score}"
+
+
+# ---------------------------------------------------------------------------
+# 6. AI exposure overlay
+# ---------------------------------------------------------------------------
+
+class TestAIExposure:
+    def _lists(self, store, entity, el, jp, cn, maxes=(1000, 250, 88)):
+        for sig, n, m in zip(("entity_list_count", "jp_eul_count", "cn_ec_count"), (el, jp, cn), maxes):
+            _write(store, "export_controls", entity, sig, 0.0,
+                   metadata={"raw_count": n, "list_max": m})
+
+    def test_full_coverage_formula(self, scorer, store):
+        import math
+        from exo import config
+        _write(store, "comtrade", "KR", "hw_contested_share", 0.6)
+        _write(store, "comtrade", "KR", "cn_mineral_dependence", 0.4)    # hardware 0.5
+        _write(store, "comtrade", "KR", "supplier_chokepoint", 0.3)      # chokepoint 0.3
+        for sig in ("cables_in_service", "ixp_count", "facility_count"):
+            _write(store, "digital_infra", "KR", sig, 0.2)               # infra 0.2
+        _write(store, "world_bank", "KR", "electricity_access", 100.0)  # power gap 0 → access 0.1
+        self._lists(store, "KR", el=6, jp=0, cn=0)
+        dim = scorer.ai_exposure("KR", _now())
+        ec = math.log1p(6) / math.log1p(1000 + 250 + config.AI_CN_LIST_WEIGHT * 88)
+        assert dim.metadata["coverage"] == "4/4"
+        assert dim.metadata["components"]["hardware"] == pytest.approx(0.5)
+        assert dim.metadata["components"]["access"] == pytest.approx(0.1)
+        assert dim.score == pytest.approx(0.6 * (0.5 + 0.3 + 0.1) / 3 + 0.4 * ec, abs=1e-3)
+        assert dim.weight == config.DIMENSION_WEIGHTS["ai_exposure"]
+
+    def test_china_list_counts_at_configured_weight(self, scorer, store):
+        self._lists(store, "US", el=0, jp=0, cn=88)
+        self._lists(store, "RU", el=0, jp=0, cn=0)
+        us = scorer.ai_exposure("US", _now()).metadata["components"]["export_controls"]
+        ru = scorer.ai_exposure("RU", _now()).metadata["components"]["export_controls"]
+        assert us > 0 and ru == 0.0
+
+    def test_missing_components_left_out_not_defaulted(self, scorer, store):
+        _write(store, "comtrade", "TW", "supplier_chokepoint", 0.8)
+        dim = scorer.ai_exposure("TW", _now())
+        # Only chokepoint: no 0.5 placeholders, no short-term tier.
+        assert dim.metadata["coverage"] == "1/4"
+        assert set(dim.tier_scores) == {"structural"}
+        assert dim.score == pytest.approx(0.8)
+
+    def test_no_data_is_neutral_and_flagged(self, scorer):
+        dim = scorer.ai_exposure("XX", _now())
+        assert dim.score == 0.5 and dim.metadata["coverage"] == "0/4"
+        assert dim.tier_scores == {}

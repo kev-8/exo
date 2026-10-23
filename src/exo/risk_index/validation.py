@@ -7,6 +7,7 @@ Secondary benchmark: V-Dem Liberal Democracy Index
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -104,3 +105,40 @@ def validate_against_vdem(
         "n_countries": len(common),
         "countries": common,
     }
+
+# AI exposure rollback trigger: promoted to a 0.10-weight dimension before its
+# 4 weeks of production data, on condition that it stays stable.
+AI_JUMP_THRESHOLD = 0.05
+
+
+def ai_exposure_jumps(
+    index_store,
+    countries: list[str],
+    now: datetime | None = None,
+    days: int = 7,
+    threshold: float = AI_JUMP_THRESHOLD,
+) -> dict[str, dict[str, Any]]:
+    """Countries whose ai_exposure moved more than *threshold* since *days* ago.
+
+    A jump with no real event behind it (a new list designation, a data
+    release) means the score is unstable: set config.AI_EXPOSURE_WEIGHT to 0.
+    The contributing signals on both sides are returned to judge that.
+    """
+    now = now or datetime.now(timezone.utc)
+
+    def ai_at(country: str, ts: datetime):
+        snaps = index_store.get_history(country, end_ts=ts, limit=1)
+        return next((d for s in snaps for d in s.dimensions if d.name == "ai_exposure"), None)
+
+    jumps: dict[str, dict[str, Any]] = {}
+    for country in countries:
+        after, before = ai_at(country, now), ai_at(country, now - timedelta(days=days))
+        if after is None or before is None:
+            continue
+        if abs(after.score - before.score) > threshold:
+            jumps[country] = {
+                "before": before.score, "after": after.score,
+                "signals_before": before.contributing_signals,
+                "signals_after": after.contributing_signals,
+            }
+    return jumps
