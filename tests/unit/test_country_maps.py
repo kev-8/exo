@@ -8,7 +8,7 @@ COUNTRIES but missed in one map loses that signal silently.
 import pytest
 
 from api.routes.countries import COUNTRY_META
-from exo.ingestion import gdelt, ucdp, unga_votes, wgi, wits, world_bank
+from exo.ingestion import gdelt, ofac, ucdp, unga_votes, wgi, wits, world_bank
 from exo.risk_index.engine import COUNTRIES
 
 MAPS = {
@@ -19,6 +19,7 @@ MAPS = {
     "unga_votes ISO3_TO_ISO2": set(unga_votes.ISO3_TO_ISO2.values()),
     "ucdp ISO2_TO_UCDP": set(ucdp.ISO2_TO_UCDP),
     "gdelt COUNTRY_FIPS_MAP": set(gdelt.COUNTRY_FIPS_MAP),
+    "ofac OFAC_COUNTRY_MAP": set(ofac.OFAC_COUNTRY_MAP.values()),
 }
 
 
@@ -36,3 +37,4 @@ def test_codes_that_differ_from_iso():
     assert gdelt.COUNTRY_FIPS_MAP["CD"] == ("CG",)
     assert wits.TRACKED_COUNTRIES["CD"] == "ZAR"
     assert ucdp.ISO2_TO_UCDP["CD"] == 490
+    assert ofac.OFAC_COUNTRY_MAP["Korea, South"] == "KR"

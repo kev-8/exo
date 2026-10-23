@@ -62,6 +62,8 @@ OFAC_COUNTRY_MAP: dict[str, str] = {
     "Yemen": "YE", "Zimbabwe": "ZW",
     "Germany": "DE", "Japan": "JP", "Netherlands": "NL", "Singapore": "SG",
     "United Arab Emirates": "AE",
+    "Brazil": "BR", "Chile": "CL", "France": "FR", "Kenya": "KE",
+    "Malaysia": "MY", "South Africa": "ZA", "Taiwan": "TW", "United Kingdom": "GB",
     # Aliases that appear in OFAC XML
     "Korea, North": "KP",
     "Korea, South": "KR",
