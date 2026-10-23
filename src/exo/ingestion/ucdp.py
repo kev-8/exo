@@ -22,9 +22,11 @@ instead (scorer default 0.5), as is any country whose fetch failed.
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 
@@ -224,3 +226,30 @@ class UCDPCandidateIngestor(_UCDPBase):
     _events_signal = "ucdp_candidate_events"
     _fatalities_signal = ""   # candidate dataset omits best-estimate fatalities
     _year_filter = {}
+
+
+# Output of scripts/seed_ucdp_bulk.py, committed so a deployment without a
+# shell (Railway Hobby) gets UCDP data until the API token arrives.
+SEED_FILE = Path(__file__).with_name("ucdp_seed.json")
+
+
+def seed_missing(store, seed_file: Path = SEED_FILE) -> int:
+    """Write each seed record whose country and signal the store holds nothing for.
+
+    Runs at scheduler startup. Records already present (from the live
+    ingestor, an earlier seed, or a data tarball) are never overwritten, so
+    this is a no-op on every start after the first. Returns records written.
+    """
+    now = datetime.now(timezone.utc)
+    written = 0
+    for row in json.loads(seed_file.read_text()):
+        if store.get_latest(entity=row["entity"], signal_type=row["signal_type"],
+                            source=row["source"]):
+            continue
+        store.write(FeatureRecord(
+            source=row["source"], entity=row["entity"], signal_type=row["signal_type"],
+            value=row["value"], metadata=row["metadata"], as_of_ts=now,
+        ))
+        written += 1
+    logger.info("UCDP seed: wrote %d missing records", written)
+    return written

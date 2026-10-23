@@ -4,6 +4,7 @@
 !ui/package.json
 !ui/package-lock.json
 !api/data/*.json
+!src/exo/ingestion/ucdp_seed.json
 *.csv
 __pycache__/
 /src/exo/data/

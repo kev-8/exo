@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.combining import OrTrigger
@@ -22,7 +22,7 @@ from exo.ingestion.kalshi import KalshiIngestor
 from exo.ingestion.kalshi_resolution import KalshiResolutionIngestor
 from exo.ingestion.polymarket import PolymarketIngestor
 from exo.ingestion.ofac import OFACIngestor
-from exo.ingestion.ucdp import UCDPCandidateIngestor, UCDPGEDIngestor
+from exo.ingestion.ucdp import UCDPCandidateIngestor, UCDPGEDIngestor, seed_missing
 from exo.ingestion.unga_votes import UNGAVotesIngestor
 from exo.ingestion.wits import WITSIngestor
 from exo.ingestion.wgi import WGIIngestor
@@ -177,10 +177,13 @@ class ExoScheduler:
         self._add_ingestor_job(self.ucdp_candidate, "ucdp_candidate_ingest",
                                trigger=CronTrigger(day_of_week="mon", hour=9, minute=30, timezone="UTC"))
 
-        # Risk index update — every 6 hours
+        # Risk index update — every 6 hours, first run shortly after startup
+        # (after the startup WGI poll) so a deploy that adds countries or data
+        # doesn't wait 6 hours to show it.
         self._scheduler.add_job(
             self._risk_index_update, id="risk_index_update",
             trigger=IntervalTrigger(hours=6),
+            next_run_time=datetime.now(timezone.utc) + timedelta(minutes=2),
         )
 
         # Staleness check — every 5 minutes
@@ -230,6 +233,11 @@ class ExoScheduler:
     # ------------------------------------------------------------------
 
     async def start(self) -> None:
+        # Fill UCDP gaps (newly tracked countries) before the first risk update.
+        try:
+            await asyncio.to_thread(seed_missing, self.store)
+        except Exception as exc:
+            logger.warning("UCDP seed failed: %s", exc)
         self.setup_jobs()
         await self.bus.start()
         self._scheduler.start()
