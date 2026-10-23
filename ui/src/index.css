@@ -31,6 +31,18 @@ html, body, #root {
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
+/* Detail panels that scroll inside (trade, signal feed): an always-visible
+   white scrollbar so it's clear there's more to see. Chrome and Safari use the
+   ::-webkit-scrollbar rules, which also replace macOS's hide-until-scrolling
+   overlay bar; Chrome ignores them once scrollbar-color is set, so the
+   standard properties are given to Firefox only. */
+@supports (-moz-appearance: none) {
+  .scroll-white { scrollbar-width: thin; scrollbar-color: #ffffff transparent; }
+}
+.scroll-white::-webkit-scrollbar { width: 6px; }
+.scroll-white::-webkit-scrollbar-track { background: transparent; }
+.scroll-white::-webkit-scrollbar-thumb { background: #ffffff; border-radius: 3px; }
+
 .font-logo    { font-family: 'Orbitron', sans-serif; }
 .font-display { font-family: 'Chakra Petch', sans-serif; }
 .font-mono    { font-family: 'IBM Plex Mono', monospace; }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Globe from './components/Globe'
 import RiskCard from './components/RiskCard'
@@ -101,6 +101,30 @@ export default function App() {
   // On phones the detail cards fill the screen, and the header/selector (z-30)
   // would otherwise paint on top of them. Give the cards the screen instead.
   const hideChrome = isMobile && !!selected
+
+  // Where the logo header ends and the country selector begins, so the detail
+  // view can be fitted between them instead of running underneath (desktop and
+  // tablet, where both stay on screen while a country is open).
+  const headerRef   = useRef(null)
+  const selectorRef = useRef(null)
+  const [chromeInset, setChromeInset] = useState({ top: 0, bottom: 0 })
+  useLayoutEffect(() => {
+    const measure = () => {
+      const header   = headerRef.current?.getBoundingClientRect()
+      const selector = selectorRef.current?.getBoundingClientRect()
+      setChromeInset({
+        top:    header   ? Math.round(header.bottom) : 0,
+        bottom: selector ? Math.round(window.innerHeight - selector.top) : 0,
+      })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    if (headerRef.current)   ro.observe(headerRef.current)
+    if (selectorRef.current) ro.observe(selectorRef.current)
+    window.addEventListener('resize', measure)
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure) }
+  }, [introDone])
+  const fitBetweenChrome = !isMobile && introDone
 
   useEffect(() => {
     if (prefersReducedMotion()) return
@@ -278,6 +302,7 @@ export default function App() {
 
       {/* ── Header ── */}
       <motion.div
+        ref={headerRef}
         initial={false}
         animate={{ opacity: hideChrome ? 0 : 1 }}
         transition={{ duration: 0.3 }}
@@ -291,6 +316,7 @@ export default function App() {
 
       {/* ── Country selector — bottom-left ── */}
       <motion.div
+        ref={selectorRef}
         initial={{ opacity: 0, y: 16 }}
         animate={introDone ? { opacity: hideChrome ? 0 : 1, y: 0 } : { opacity: 0, y: 16 }}
         transition={{ duration: 0.6, delay: introDone ? 0.15 : 0, ease: [0.16, 1, 0.3, 1] }}
@@ -321,7 +347,13 @@ export default function App() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
             className="absolute inset-0 flex items-center justify-center"
-            style={{ zIndex: 20 }}
+            style={{
+              zIndex: 20,
+              // The back-button row (~56px with its gap) may rise into the header
+              // band: it sits on the right, the logo on the left. 16px above the selector.
+              paddingTop:    fitBetweenChrome ? Math.max(0, chromeInset.top - 56) : 0,
+              paddingBottom: fitBetweenChrome ? chromeInset.bottom + 16 : 0,
+            }}
           >
             {/* Fullscreen click-catcher — clicking outside the cards dismisses */}
             <div className="absolute inset-0" onClick={handleDeselect} style={{ cursor: 'default' }} />
@@ -330,10 +362,13 @@ export default function App() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.97 }}
               transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-              className="grid gap-5 w-full pointer-events-auto relative grid-cols-1 md:grid-cols-2 px-4 md:px-10 py-6 md:py-10"
+              className={`grid gap-5 w-full pointer-events-auto relative grid-cols-1 md:grid-cols-2 px-4 md:px-10 ${fitBetweenChrome ? 'py-0' : 'py-6 md:py-10'}`}
               style={{
                 maxWidth: '1120px',
-                maxHeight: '100dvh',
+                // Between the header and selector the risk card keeps its height
+                // and the two panels below share what's left, scrolling inside.
+                maxHeight: fitBetweenChrome ? '100%' : '100dvh',
+                gridTemplateRows: fitBetweenChrome ? 'auto auto minmax(0, 1fr)' : undefined,
                 overflowY: 'auto',
                 zIndex: 1,
               }}
@@ -385,11 +420,13 @@ export default function App() {
 
               {/* Trade panel — left half */}
               <div
-                className="rounded-xl border-white"
+                className="rounded-xl border-white scroll-white"
                 style={{
                   background: 'rgba(10,10,10,0.75)',
                   border: '2.5px solid #ffffff',
                   padding: '1.0rem',
+                  minHeight: 0,
+                  overflowY: 'auto',
                 }}
               >
                 <TradePanel tradeData={tradeData[selected]} loading={!tradeData[selected]} />
@@ -397,11 +434,13 @@ export default function App() {
 
               {/* Signal feed — right half */}
               <div
-                className="rounded-xl border-white"
+                className="rounded-xl border-white scroll-white"
                 style={{
                   background: 'rgba(10,10,10,0.75)',
                   border: '2.5px solid #ffffff',
                   padding: '1.0rem',
+                  minHeight: 0,
+                  overflowY: 'auto',
                 }}
               >
                 <SignalFeed signals={signals} loading={signalsLoading} />

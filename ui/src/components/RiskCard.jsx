@@ -12,6 +12,8 @@ const DIMENSION_LABELS = {
   ai_exposure:            'AI Exposure',
 }
 
+const README_URL = 'https://github.com/kev-8/exo#readme'
+
 const TIER_LABELS = {
   structural: 'STRUCTURAL',
   short_term: 'SHORT-TERM',
@@ -68,8 +70,9 @@ export default function RiskCard({ snapshot, country, onClose }) {
                 </div>
               </div>
 
-              {/* Three-tier scores */}
-              <div className="grid grid-cols-3 gap-3">
+              {/* Three-tier scores — centred in the space the six dimension bars leave */}
+              <div className="flex-1 flex items-center">
+              <div className="grid grid-cols-3 gap-3 w-full">
                 {[
                   { label: 'STRUCTURAL', score: structural_score },
                   { label: 'SHORT-TERM', score: short_term_score },
@@ -83,17 +86,34 @@ export default function RiskCard({ snapshot, country, onClose }) {
                     className="rounded px-2 py-2 text-center"
                     style={{}}
                   >
-                    <div className="font-display text-xs tracking-[0.2em] text-slate-200 mb-1.5">{label}</div>
-                    <div className="font-mono text-2xl font-medium" style={{ color: riskColor(score) }}>
+                    <div className="font-display text-xs md:text-[0.8rem] tracking-[0.2em] text-slate-200 mb-2">{label}</div>
+                    <div className="font-mono text-2xl md:text-3xl font-medium" style={{ color: riskColor(score) }}>
                       {score.toFixed(2)}
                     </div>
                   </motion.div>
                 ))}
               </div>
+              </div>
 
-              {/* Timestamp */}
-              <div className="mt-auto pt-5 font-mono text-[10px] text-slate-500">
-                as of {new Date(snapshot.as_of_ts).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+              {/* Timestamp + methodology link */}
+              <div className="pt-5 flex items-center justify-between gap-2 font-mono text-[10px] text-slate-500">
+                <span>
+                  as of {new Date(snapshot.as_of_ts).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                </span>
+                <a
+                  href={README_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="How the risk index works (README on GitHub)"
+                  title="How the risk index works"
+                  className="text-slate-400 hover:text-white transition-colors"
+                >
+                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.3" />
+                    <circle cx="8" cy="4.9" r="0.9" fill="currentColor" />
+                    <path d="M8 7.2v4.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                  </svg>
+                </a>
               </div>
             </div>
 
