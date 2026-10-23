@@ -185,7 +185,10 @@ export default function App() {
         .finally(() => setRiskLoading(false))
     }
     if (!tradeData[iso2]) {
-      api.trade(iso2).then(data => setTradeData(d => ({ ...d, [iso2]: data }))).catch(() => {})
+      // No trade entry (404) still ends loading: the panel renders nothing for an empty list.
+      api.trade(iso2)
+        .then(data => setTradeData(d => ({ ...d, [iso2]: data })))
+        .catch(() => setTradeData(d => ({ ...d, [iso2]: { country: iso2, partners: [] } })))
     }
 
     setSignalsLoading(true)

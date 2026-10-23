@@ -4,7 +4,8 @@ The WB indicator API dropped PV.EST / VA.EST / RL.EST / CC.EST in May 2026, so
 the official per-edition dataset file is read instead. Each edition is
 published once a year at a predictable URL (the 2026 edition covers data
 through 2025); this ingestor finds the newest edition that exists, and
-downloads it only when it is newer than the one already stored.
+downloads it only when some tracked country doesn't hold it yet (a new
+edition, or a newly tracked country), writing rows for those countries only.
 
 Release dates are not announced and have drifted between late September and
 the end of the year, which is why the scheduler polls (weekly Sep–Dec, monthly
@@ -55,6 +56,8 @@ ISO2_TO_ISO3: dict[str, str] = {
     "IR": "IRN", "IN": "IND", "PK": "PAK", "KP": "PRK", "TW": "TWN",
     "HT": "HTI", "BR": "BRA", "MX": "MEX", "NG": "NGA", "KE": "KEN",
     "ZA": "ZAF", "FR": "FRA", "GB": "GBR", "MY": "MYS", "CL": "CHL",
+    "KR": "KOR", "JP": "JPN", "DE": "DEU", "NL": "NLD", "AE": "ARE",
+    "SG": "SGP", "VN": "VNM", "ID": "IDN", "CD": "COD", "GN": "GIN",
 }
 
 
@@ -110,18 +113,19 @@ class WGIIngestor(BaseIngestor):
                 resp.raise_for_status()
         return None
 
-    def _held_edition(self) -> int | None:
-        """Newest edition already in the store, or None if none is.
+    def _held_editions(self) -> dict[str, int]:
+        """Newest edition already in the store, per country.
 
-        Raises on an unreadable store rather than returning None: None means
+        Per country, not overall, so a country added to the tracked list gets
+        the current edition instead of waiting a year for the next one.
+        Raises on an unreadable store rather than returning {}: {} means
         "download and write", which on a populated store would duplicate the
         current edition.
         """
         held = self.store.latest_metadata_by_entity(
             self.source, "political_stability", "edition"
         )
-        editions = [int(e) for e in held.values() if str(e).isdigit()]
-        return max(editions) if editions else None
+        return {iso2: int(e) for iso2, e in held.items() if str(e).isdigit()}
 
     async def fetch(self) -> list[RawRecord]:
         now = self.utcnow()
@@ -134,18 +138,20 @@ class WGIIngestor(BaseIngestor):
                 )
                 return []
 
-            held = self._held_edition()
-            if held is not None and held >= edition:
-                logger.info("WGI edition %d already stored; nothing to do", held)
+            held = self._held_editions()
+            behind = {iso2 for iso2 in self.countries if held.get(iso2, 0) < edition}
+            if not behind:
+                logger.info("WGI edition %d already stored; nothing to do", edition)
                 return []
 
-            logger.info("Downloading WGI edition %d (stored: %s)", edition, held)
+            logger.info("Downloading WGI edition %d for %s", edition, ", ".join(sorted(behind)))
             resp = await client.get(_URL.format(edition=edition))
             resp.raise_for_status()
 
         by_country = await asyncio.to_thread(parse_dataset, resp.content, self._iso3_to_iso2)
+        by_country = {iso2: dims for iso2, dims in by_country.items() if iso2 in behind}
 
-        missing = sorted(set(self.countries) - set(by_country))
+        missing = sorted(behind - set(by_country))
         if missing:
             logger.warning("WGI edition %d has no data for %s", edition, ", ".join(missing))
 

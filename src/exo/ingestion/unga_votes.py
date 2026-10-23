@@ -30,6 +30,8 @@ ISO3_TO_ISO2: dict[str, str] = {
     "IRN": "IR", "PRK": "KP", "TWN": "TW", "IND": "IN", "PAK": "PK",
     "HTI": "HT", "BRA": "BR", "MEX": "MX", "NGA": "NG", "KEN": "KE",
     "ZAF": "ZA", "FRA": "FR", "GBR": "GB", "MYS": "MY", "CHL": "CL",
+    "KOR": "KR", "JPN": "JP", "DEU": "DE", "NLD": "NL", "ARE": "AE",
+    "SGP": "SG", "VNM": "VN", "IDN": "ID", "COD": "CD", "GIN": "GN",
 }
 
 # Number of years to use for variance calculation

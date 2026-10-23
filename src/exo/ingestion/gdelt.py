@@ -74,6 +74,9 @@ COUNTRY_FIPS_MAP: dict[str, tuple[str, ...]] = {
     "IN": ("IN",), "PK": ("PK",), "HT": ("HA",), "BR": ("BR",),
     "MX": ("MX",), "NG": ("NI",), "KE": ("KE",), "ZA": ("SF",),
     "FR": ("FR",), "GB": ("UK",), "MY": ("MY",), "CL": ("CI",),
+    "KR": ("KS",), "JP": ("JA",), "DE": ("GM",), "NL": ("NL",),
+    "AE": ("AE",), "SG": ("SN",), "VN": ("VM",), "ID": ("ID",),
+    "CD": ("CG",), "GN": ("GV",),
 }
 
 

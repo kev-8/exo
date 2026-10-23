@@ -28,6 +28,16 @@ COUNTRY_META: dict[str, dict] = {
     "GB": {"name": "United Kingdom","flag": "🇬🇧", "lat":  55.38, "lon":  -3.44, "region": "Europe"},
     "MY": {"name": "Malaysia",      "flag": "🇲🇾", "lat":   4.21, "lon": 108.07, "region": "Southeast Asia"},
     "CL": {"name": "Chile",         "flag": "🇨🇱", "lat": -35.68, "lon": -71.54, "region": "South America"},
+    "KR": {"name": "South Korea",   "flag": "🇰🇷", "lat":  35.91, "lon": 127.77, "region": "East Asia"},
+    "JP": {"name": "Japan",         "flag": "🇯🇵", "lat":  36.20, "lon": 138.25, "region": "East Asia"},
+    "DE": {"name": "Germany",       "flag": "🇩🇪", "lat":  51.17, "lon":  10.45, "region": "Europe"},
+    "NL": {"name": "Netherlands",   "flag": "🇳🇱", "lat":  52.13, "lon":   5.29, "region": "Europe"},
+    "AE": {"name": "United Arab Emirates", "flag": "🇦🇪", "lat": 23.42, "lon": 53.85, "region": "Middle East"},
+    "SG": {"name": "Singapore",     "flag": "🇸🇬", "lat":   1.35, "lon": 103.82, "region": "Southeast Asia"},
+    "VN": {"name": "Vietnam",       "flag": "🇻🇳", "lat":  14.06, "lon": 108.28, "region": "Southeast Asia"},
+    "ID": {"name": "Indonesia",     "flag": "🇮🇩", "lat":  -0.79, "lon": 113.92, "region": "Southeast Asia"},
+    "CD": {"name": "DR Congo",      "flag": "🇨🇩", "lat":  -4.04, "lon":  21.76, "region": "Central Africa"},
+    "GN": {"name": "Guinea",        "flag": "🇬🇳", "lat":   9.95, "lon":  -9.70, "region": "West Africa"},
 }
 
 

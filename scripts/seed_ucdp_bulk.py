@@ -45,6 +45,8 @@ ISO2_TO_UCDP: dict[str, int] = {
     "IR": 630, "IN": 750, "PK": 770, "KP": 731, "TW": 713,
     "HT": 41,  "BR": 140, "MX": 70,  "NG": 475, "KE": 501,
     "ZA": 560, "FR": 220, "GB": 200, "MY": 820, "CL": 155,
+    "KR": 732, "JP": 740, "DE": 260, "NL": 210, "AE": 696,
+    "SG": 830, "VN": 816, "ID": 850, "CD": 490, "GN": 438,
 }
 
 GED_URL       = "https://ucdp.uu.se/downloads/ged/ged251-csv.zip"

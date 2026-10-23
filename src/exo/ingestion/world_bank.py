@@ -31,6 +31,7 @@ INDICATORS: dict[str, tuple[str, int]] = {
 COUNTRIES = [
     "US", "RU", "CN", "UA", "IL", "IR", "IN", "PK", "KP", "TW",
     "HT", "BR", "MX", "NG", "KE", "ZA", "FR", "GB", "MY", "CL",
+    "KR", "JP", "DE", "NL", "AE", "SG", "VN", "ID", "CD", "GN",
 ]
 
 

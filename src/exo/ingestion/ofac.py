@@ -60,8 +60,11 @@ OFAC_COUNTRY_MAP: dict[str, str] = {
     "Uganda": "UG", "Ukraine": "UA", "United States": "US",
     "Uzbekistan": "UZ", "Venezuela": "VE", "Vietnam": "VN",
     "Yemen": "YE", "Zimbabwe": "ZW",
+    "Germany": "DE", "Japan": "JP", "Netherlands": "NL", "Singapore": "SG",
+    "United Arab Emirates": "AE",
     # Aliases that appear in OFAC XML
     "Korea, North": "KP",
+    "Korea, South": "KR",
     "Iran, Islamic Republic of": "IR",
     "Syrian Arab Republic": "SY",
     "Lao People's Democratic Republic": "LA",

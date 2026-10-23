@@ -40,6 +40,9 @@ ISO2_TO_WITS: dict[str, str] = {
     "HT": "HTI", "BR": "BRA", "MX": "MEX", "NG": "NGA",
     "KE": "KEN", "ZA": "ZAF", "FR": "FRA", "GB": "GBR",
     "MY": "MYS", "CL": "CHL",
+    "KR": "KOR", "JP": "JPN", "DE": "DEU", "NL": "NLD",
+    "AE": "ARE", "SG": "SGP", "VN": "VNM", "ID": "IDN",
+    "CD": "ZAR", "GN": "GIN",  # WITS still codes DR Congo as ZAR, not COD
     # Extended set — potential sanctioned partners (not tracked countries)
     "BY": "BLR", "VE": "VEN", "SY": "SYR", "CU": "CUB",
     "SD": "SDN", "MM": "MMR", "IQ": "IRQ", "LB": "LBN",
@@ -57,6 +60,9 @@ TRACKED_COUNTRIES: dict[str, str] = {
     "HT": "HTI", "BR": "BRA", "MX": "MEX", "NG": "NGA",
     "KE": "KEN", "ZA": "ZAF", "FR": "FRA", "GB": "GBR",
     "MY": "MYS", "CL": "CHL",
+    "KR": "KOR", "JP": "JPN", "DE": "DEU", "NL": "NLD",
+    "AE": "ARE", "SG": "SGP", "VN": "VNM", "ID": "IDN",
+    "CD": "ZAR", "GN": "GIN",
 }
 
 PARTNER_WORLD = "WLD"

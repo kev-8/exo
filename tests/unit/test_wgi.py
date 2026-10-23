@@ -20,6 +20,7 @@ from exo.ingestion.wgi import (
     parse_dataset,
 )
 from exo.models import FeatureQuery
+from exo.risk_index.engine import COUNTRIES
 from exo.store.feature_store import FeatureStore
 
 NOW = datetime(2026, 10, 15, 12, tzinfo=timezone.utc)
@@ -102,7 +103,8 @@ class TestParse:
     def test_country_map_covers_divergent_codes(self):
         assert ISO2_TO_ISO3["KP"] == "PRK"
         assert ISO2_TO_ISO3["TW"] == "TWN"
-        assert len(ISO2_TO_ISO3) == 20
+        assert ISO2_TO_ISO3["CD"] == "COD"
+        assert set(ISO2_TO_ISO3) == set(COUNTRIES)
 
 
 class TestNormalise:
@@ -139,7 +141,10 @@ class TestRun:
         assert written[0].metadata["edition"] == 2025
 
     @pytest.mark.asyncio
-    async def test_held_edition_is_not_rewritten(self, ingestor):
+    async def test_held_edition_is_not_rewritten(self, store):
+        from exo.event_bus import EventBus
+
+        ingestor = WGIIngestor(countries={"US": "USA"}, store=store, bus=EventBus())
         published = {2026: _dta([("USA", 2025, "pv", 0.5)])}
         assert await _run(ingestor, published)
         client = _client(published)
@@ -147,6 +152,17 @@ class TestRun:
              patch.object(ingestor, "utcnow", return_value=NOW + timedelta(days=7)):
             assert await ingestor.run() == []
         client.get.assert_not_called()  # one HEAD, no download
+
+    @pytest.mark.asyncio
+    async def test_newly_tracked_country_gets_held_edition(self, store):
+        from exo.event_bus import EventBus
+
+        published = {2026: _dta([("USA", 2025, "pv", 0.5), ("KOR", 2025, "pv", 1.0)])}
+        before = WGIIngestor(countries={"US": "USA"}, store=store, bus=EventBus())
+        await _run(before, published)
+        after = WGIIngestor(countries={"US": "USA", "KR": "KOR"}, store=store, bus=EventBus())
+        written = await _run(after, published, now=NOW + timedelta(days=7))
+        assert {r.entity for r in written} == {"KR"}  # US is not written twice
 
     @pytest.mark.asyncio
     async def test_newer_edition_outranks_previous(self, ingestor, store):
