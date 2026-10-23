@@ -13,7 +13,10 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from exo import config
 from exo.event_bus import get_bus
+from exo.ingestion.comtrade import ComtradeIngestor
+from exo.ingestion.digital_infra import DigitalInfraIngestor
 from exo.ingestion.eia import EIAIngestor
+from exo.ingestion.export_controls import ExportControlsIngestor
 from exo.ingestion.finnhub import FinnhubIngestor
 from exo.ingestion.fred import FREDIngestor
 from exo.ingestion.gdelt import GDELTIngestor
@@ -76,6 +79,9 @@ class ExoScheduler:
         self.finnhub = FinnhubIngestor(**_kwargs)
         self.ofac = OFACIngestor(**_kwargs)
         self.wits = WITSIngestor(**_kwargs)
+        self.comtrade = ComtradeIngestor(**_kwargs)
+        self.export_controls = ExportControlsIngestor(**_kwargs)
+        self.digital_infra = DigitalInfraIngestor(**_kwargs)
         self.ucdp_ged = UCDPGEDIngestor(**_kwargs)
         self.ucdp_candidate = UCDPCandidateIngestor(**_kwargs)
 
@@ -84,6 +90,21 @@ class ExoScheduler:
     # ------------------------------------------------------------------
     # Schedule registration
     # ------------------------------------------------------------------
+
+    def _run_now_if_empty(self, source: str) -> dict:
+        """next_run_time=now when the store holds nothing for *source*, else {}.
+
+        For slow-cadence jobs (monthly) on a fresh volume, so a deploy doesn't
+        leave a new source empty until its first scheduled run, without
+        re-running a ~10 minute job on every restart. The kwarg is omitted
+        rather than None: next_run_time=None adds the job paused.
+        """
+        part = self.store.data_dir / f"source={source}"
+        held = any(not f.name.startswith("._") for f in part.glob("date=*/*.parquet"))
+        if held:
+            return {}
+        logger.info("No %s data in the store; running its job at startup", source)
+        return {"next_run_time": datetime.now(timezone.utc)}
 
     def _add_ingestor_job(self, ingestor, job_id: str, **trigger_kwargs) -> None:
         if job_id in self._exclude_jobs:
@@ -165,9 +186,27 @@ class ExoScheduler:
                                trigger=CronTrigger(day_of_week="mon", hour=7, minute=0, timezone="UTC"))
 
         # WITS trade concentration + secondary exposure — weekly Monday 07:30 UTC
-        # Runs after OFAC so sanctioned-partner list is populated from live SDN data
         self._add_ingestor_job(self.wits, "wits_ingest",
                                trigger=CronTrigger(day_of_week="mon", hour=7, minute=30, timezone="UTC"))
+
+        # AI exposure sources below also run at startup while the store holds
+        # nothing for them, so a fresh deploy fills them the same day.
+
+        # Comtrade AI supply-chain signals — monthly, 2nd at 05:00 UTC. Annual
+        # data, ~80 paced calls (~10 min) a run.
+        self._add_ingestor_job(self.comtrade, "comtrade_ingest",
+                               trigger=CronTrigger(day=2, hour=5, minute=0, timezone="UTC"),
+                               **self._run_now_if_empty(self.comtrade.source))
+
+        # Export-control lists (US Entity List, Japan EUL, China ECL/UEL) — daily 04:00 UTC
+        self._add_ingestor_job(self.export_controls, "export_controls_ingest",
+                               trigger=CronTrigger(hour=4, minute=0, timezone="UTC"),
+                               **self._run_now_if_empty(self.export_controls.source))
+
+        # Submarine cables, IXPs and facilities — monthly, 3rd at 05:00 UTC
+        self._add_ingestor_job(self.digital_infra, "digital_infra_ingest",
+                               trigger=CronTrigger(day=3, hour=5, minute=0, timezone="UTC"),
+                               **self._run_now_if_empty(self.digital_infra.source))
 
         # UCDP GED (structural conflict) — weekly Monday 08:00 UTC
         self._add_ingestor_job(self.ucdp_ged, "ucdp_ged_ingest",

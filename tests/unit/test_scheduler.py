@@ -20,3 +20,25 @@ async def test_late_jobs_still_run(tmp_path):
         assert job.max_instances == 1
     finally:
         sched._scheduler.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
+async def test_ai_sources_run_at_startup_only_when_empty(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    from exo.models import FeatureRecord
+
+    store = FeatureStore(data_dir=tmp_path / "features", redis_url=None)
+    store.write(FeatureRecord(source="comtrade", entity="US", signal_type="hw_contested_share",
+                              value=0.3, metadata={}, as_of_ts=datetime.now(timezone.utc)))
+    sched = ExoScheduler(store=store)
+    sched.setup_jobs()
+    sched._scheduler.start(paused=True)
+    try:
+        soon = datetime.now(timezone.utc) + timedelta(minutes=1)
+        # Empty sources fire now; comtrade already has data, so it waits for its cron.
+        assert sched._scheduler.get_job("digital_infra_ingest").next_run_time < soon
+        assert sched._scheduler.get_job("export_controls_ingest").next_run_time < soon
+        assert sched._scheduler.get_job("comtrade_ingest").next_run_time > soon
+    finally:
+        sched._scheduler.shutdown(wait=False)

@@ -71,7 +71,14 @@ STALENESS_THRESHOLDS: dict[str, float] = {
     "ofac": 7 * 24 * 3600,           # weekly poll (SDN list updated frequently)
     "ucdp_ged": 7 * 24 * 3600,       # weekly poll, annual releases
     "ucdp_candidate": 7 * 24 * 3600, # weekly poll, quarterly revisions
+    "comtrade": 400 * 86400,         # monthly poll, annual data
+    "export_controls": 3 * 86400,    # daily poll
+    "digital_infra": 45 * 86400,     # monthly poll
 }
+
+# Fixed year for cn_mineral_dependence: before China's 2023-25 export controls,
+# so later years' drop in Chinese supply doesn't read as reduced exposure.
+AI_MINERAL_BASELINE_YEAR: int = 2022
 
 # ---------------------------------------------------------------------------
 # Risk index dimension weights

@@ -26,6 +26,7 @@ INDICATORS: dict[str, tuple[str, int]] = {
     "EG.IMP.CONS.ZS": ("energy_imports_pct", 1),        # Energy imports as % of total energy use
     "NE.EXP.GNFS.ZS": ("exports_pct_gdp", -1),         # Exports of goods & services (% of GDP)
     "NE.IMP.GNFS.ZS": ("imports_pct_gdp", 1),           # Imports of goods & services (% of GDP)
+    "EG.ELC.ACCS.ZS": ("electricity_access", -1),       # Access to electricity (% of population); AI exposure overlay
 }
 
 COUNTRIES = [
