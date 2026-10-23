@@ -7,8 +7,10 @@ Downloads directly from https://ucdp.uu.se/downloads/ — no API token required.
 
 GED is filtered to GED_SINCE_YEAR (default 2015) so the structural score reflects
 recent conflict history rather than all-time legacy events back to 1989.
-Countries with zero events in the filtered window are skipped — they retain the
-scorer's neutral 0.5 default rather than being anchored to 0.0.
+A country with zero events in the window scores 0.0: UCDP's coverage is global,
+so absence from the dataset means no recorded conflict, not missing data.
+NO_COVERAGE countries are the exception — closed states whose absence reflects
+no reporting — and are skipped so they keep the scorer's neutral 0.5 default.
 
 Normalisation matches UCDPGEDIngestor / UCDPCandidateIngestor exactly
 (log-scale against rolling max across all countries in the filtered window).
@@ -34,6 +36,7 @@ import pandas as pd
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from exo.ingestion.ucdp import NO_COVERAGE
 from exo.models import FeatureRecord
 from exo.store.feature_store import FeatureStore
 
@@ -111,9 +114,9 @@ def seed_ged(store: FeatureStore, ged_df: pd.DataFrame, now: datetime) -> None:
 
     written = 0
     for gw_id, iso2 in gw_to_iso2.items():
-        d = agg.get(gw_id)
-        if d is None or d["event_count"] == 0:
-            logger.info("GED  %-2s  no events since %d — skipping (scorer defaults to 0.5)", iso2, GED_SINCE_YEAR)
+        d = agg.get(gw_id) or {"event_count": 0, "total_fatalities": 0}
+        if d["event_count"] == 0 and iso2 in NO_COVERAGE:
+            logger.info("GED  %-2s  no events, no coverage — skipping (scorer defaults to 0.5)", iso2)
             continue
 
         ec  = float(d["event_count"])
@@ -149,9 +152,9 @@ def seed_candidate(store: FeatureStore, cand_df: pd.DataFrame, now: datetime) ->
 
     written = 0
     for gw_id, iso2 in gw_to_iso2.items():
-        d = agg.get(gw_id)
-        if d is None or d["event_count"] == 0:
-            logger.info("CAND %-2s  no events — skipping (scorer defaults to 0.5)", iso2)
+        d = agg.get(gw_id) or {"event_count": 0}
+        if d["event_count"] == 0 and iso2 in NO_COVERAGE:
+            logger.info("CAND %-2s  no events, no coverage — skipping (scorer defaults to 0.5)", iso2)
             continue
 
         ec = float(d["event_count"])

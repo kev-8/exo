@@ -14,6 +14,10 @@ Auth: x-ucdp-access-token header (set UCDP_API_TOKEN env var).
 Normalisation: log-scale against a rolling max observed across all countries
 and all time, read from the feature store at normalise() time.  This keeps
 scores stable relative to the worst observed period rather than a fixed ceiling.
+
+A country the API returns no events for scores 0.0 — UCDP's coverage is global,
+so no events means no recorded conflict. NO_COVERAGE countries are skipped
+instead (scorer default 0.5), as is any country whose fetch failed.
 """
 
 from __future__ import annotations
@@ -31,6 +35,9 @@ from exo.models import FeatureQuery, FeatureRecord, RawRecord
 logger = logging.getLogger(__name__)
 
 UCDP_BASE = "https://ucdpapi.pcr.uu.se/api"
+
+# Closed states where UCDP's lack of events reflects no reporting, not peace.
+NO_COVERAGE: frozenset[str] = frozenset({"KP"})
 
 
 def _auth_headers() -> dict[str, str]:
@@ -81,7 +88,10 @@ class _UCDPBase(BaseIngestor):
         iso2: str,
         now: datetime,
     ) -> RawRecord | None:
-        """Fetch all events for a country from the UCDP paged API."""
+        """Fetch all events for a country from the UCDP paged API.
+
+        Returns None when a page fails, so a partial fetch isn't scored as calm.
+        """
         events: list[dict] = []
         page = 1
         page_size = 1000
@@ -101,7 +111,7 @@ class _UCDPBase(BaseIngestor):
                 body = resp.json()
             except Exception as exc:
                 logger.warning("UCDP fetch failed country=%s page=%d: %s", iso2, page, exc)
-                break
+                return None
 
             result = body.get("Result", [])
             events.extend(result)
@@ -111,7 +121,7 @@ class _UCDPBase(BaseIngestor):
                 break
             page += 1
 
-        if not events:
+        if not events and iso2 in NO_COVERAGE:
             return None
 
         total_fatalities = sum(

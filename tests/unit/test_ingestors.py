@@ -345,6 +345,39 @@ class TestUCDPGEDNormalise:
         assert all(r.source == "ucdp_ged" for r in records)
 
 
+class TestUCDPFetchCountry:
+    """No events is a calm country; a failed fetch or a closed state is unknown."""
+
+    @pytest.fixture
+    def ingestor(self):
+        from exo.ingestion.ucdp import UCDPGEDIngestor
+        return UCDPGEDIngestor.__new__(UCDPGEDIngestor)
+
+    def _client(self, body=None, exc=None):
+        from unittest.mock import AsyncMock, MagicMock
+        resp = MagicMock()
+        resp.json.return_value = body
+        client = AsyncMock()
+        client.get.side_effect = exc or (lambda *a, **k: resp)
+        return client
+
+    @pytest.mark.asyncio
+    async def test_no_events_is_a_zero_record(self, ingestor):
+        client = self._client({"Result": [], "TotalCount": 0})
+        raw = await ingestor._fetch_country(client, 740, "JP", _now())
+        assert raw.raw == {"event_count": 0, "total_fatalities": 0}
+
+    @pytest.mark.asyncio
+    async def test_failed_fetch_is_skipped(self, ingestor):
+        client = self._client(exc=RuntimeError("401"))
+        assert await ingestor._fetch_country(client, 740, "JP", _now()) is None
+
+    @pytest.mark.asyncio
+    async def test_no_coverage_country_is_skipped(self, ingestor):
+        client = self._client({"Result": [], "TotalCount": 0})
+        assert await ingestor._fetch_country(client, 731, "KP", _now()) is None
+
+
 class TestOFACNormalise:
     @pytest.fixture
     def ingestor(self, tmp_path):
