@@ -2,7 +2,7 @@
 
 **[exo.dosi.io](https://exo.dosi.io)**
 
-A geopolitical risk intelligence platform that produces a real-time country-level risk index.
+A geopolitical intelligence platform that produces a real-time country-level risk index.
 
 ---
 
