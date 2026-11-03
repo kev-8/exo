@@ -199,3 +199,60 @@ class TestTierScores:
         result = RiskIndexEngine._tier_composite(dims, "structural")
         # weighted avg: (0.2*0.25 + 0.8*0.15) / (0.25+0.15) = (0.05+0.12)/0.4 = 0.425
         assert abs(result - 0.425) < 1e-4
+
+
+class TestHistoryPartitions:
+    """get_history reads only the date partitions the request can need."""
+
+    NOW = datetime.now(timezone.utc)
+
+    def _write(self, index, days_ago, score):
+        from datetime import timedelta
+        from exo.models import RiskIndexSnapshot
+        index.write(RiskIndexSnapshot(
+            country="US", composite_score=score, dimensions=[],
+            as_of_ts=self.NOW - timedelta(days=days_ago),
+        ))
+
+    def _reads(self, index, monkeypatch):
+        seen = []
+        orig = index._files
+        def spy(*a):
+            files = orig(*a)
+            seen.append(len(files))
+            return files
+        monkeypatch.setattr(index, "_files", spy)
+        return seen
+
+    def test_latest_reads_only_the_recent_week(self, tmp_index, monkeypatch):
+        for d in (0, 3, 30, 60):
+            self._write(tmp_index, d, score=1 - d / 100)
+        seen = self._reads(tmp_index, monkeypatch)
+        latest = tmp_index.get_latest("US")
+        assert latest.composite_score == 1.0
+        assert seen == [2]   # today + 3 days ago; the 30- and 60-day files untouched
+
+    def test_latest_falls_back_when_the_week_is_empty(self, tmp_index, monkeypatch):
+        self._write(tmp_index, 40, score=0.3)
+        self._write(tmp_index, 90, score=0.2)
+        seen = self._reads(tmp_index, monkeypatch)
+        assert tmp_index.get_latest("US").composite_score == 0.3
+        assert seen == [0, 2]
+
+    def test_range_skips_partitions_outside_it(self, tmp_index, monkeypatch):
+        from datetime import timedelta
+        for d in (1, 10, 20, 100):
+            self._write(tmp_index, d, score=d / 100)
+        seen = self._reads(tmp_index, monkeypatch)
+        got = tmp_index.get_history("US", start_ts=self.NOW - timedelta(days=15))
+        assert [s.composite_score for s in got] == [0.01, 0.1]
+        assert seen == [2]
+
+    def test_end_bound_and_limit_match_a_full_read(self, tmp_index):
+        from datetime import timedelta
+        for d in range(0, 20, 2):
+            self._write(tmp_index, d, score=d / 100)
+        end = self.NOW - timedelta(days=9)
+        got = tmp_index.get_history("US", end_ts=end, limit=3)
+        assert [s.composite_score for s in got] == [0.1, 0.12, 0.14]
+        assert tmp_index.get_history("US", end_ts=end, limit=1)[0].composite_score == 0.1

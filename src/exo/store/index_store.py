@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import duckdb
@@ -17,6 +17,9 @@ from exo import config
 from exo.models import DimensionScore, RiskIndexSnapshot, TierScore
 
 logger = logging.getLogger(__name__)
+
+# Days of partitions an unbounded read tries before falling back to all of them.
+RECENT_LOOKBACK_DAYS = 7
 
 
 def _utc(ts: datetime) -> pd.Timestamp:
@@ -89,6 +92,28 @@ class IndexStore:
     # Read
     # ------------------------------------------------------------------
 
+    def _files(
+        self, country: str, start_ts: datetime | None, end_ts: datetime | None
+    ) -> list[str]:
+        """Snapshot files in the date partitions that can hold [start_ts, end_ts].
+
+        The bounds are widened by a day each side so a snapshot written under
+        a non-UTC date still falls inside; rows are filtered exactly later.
+        A partition whose name doesn't parse as a date is always read.
+        """
+        lo = (_utc(start_ts) - pd.Timedelta(days=1)).date() if start_ts else None
+        hi = (_utc(end_ts) + pd.Timedelta(days=1)).date() if end_ts else None
+        files = []
+        for part in (self.data_dir / f"country={country}").glob("date=*"):
+            try:
+                day = date.fromisoformat(part.name.removeprefix("date="))
+            except ValueError:
+                day = None
+            if day is not None and ((lo and day < lo) or (hi and day > hi)):
+                continue
+            files.extend(str(p) for p in part.glob("*.parquet") if not p.name.startswith("._"))
+        return files
+
     def get_history(
         self,
         country: str,
@@ -96,11 +121,25 @@ class IndexStore:
         end_ts: datetime | None = None,
         limit: int = 1000,
     ) -> list[RiskIndexSnapshot]:
-        files = [
-            str(p)
-            for p in (self.data_dir / f"country={country}").glob("date=*/*.parquet")
-            if not p.name.startswith("._")
-        ]
+        # Without a start, callers mostly want the newest few snapshots
+        # (get_latest, the AI stability check). Reading every partition made
+        # each call grow with the history, so try the last week first and only
+        # read everything when that comes up short of *limit*.
+        if start_ts is None:
+            recent_start = (end_ts or datetime.now(timezone.utc)) - timedelta(days=RECENT_LOOKBACK_DAYS)
+            recent = self._read(country, recent_start, end_ts, limit)
+            if len(recent) >= limit:
+                return recent
+        return self._read(country, start_ts, end_ts, limit)
+
+    def _read(
+        self,
+        country: str,
+        start_ts: datetime | None,
+        end_ts: datetime | None,
+        limit: int,
+    ) -> list[RiskIndexSnapshot]:
+        files = self._files(country, start_ts, end_ts)
         if not files:
             return []
         _db = duckdb.connect(":memory:")
