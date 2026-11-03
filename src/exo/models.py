@@ -49,6 +49,10 @@ class FeatureQuery:
     as_of_ts: datetime | None = None
     start_ts: datetime | None = None
     end_ts: datetime | None = None
+    # Oldest acceptable record, in seconds before as_of_ts — or before now
+    # when as_of_ts is None. Anchoring on as_of_ts keeps a point-in-time read
+    # point-in-time: measured from the wall clock, any as_of_ts more than
+    # max_age_sec in the past would match nothing.
     max_age_sec: float | None = None
     limit: int = 1000
 

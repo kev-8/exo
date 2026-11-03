@@ -5,7 +5,8 @@ Write path:
 
 Read path:
     read(query)           → point-in-time list of FeatureRecords
-    get_latest(...)       → most-recent record within max_age window
+    get_latest(...)       → most-recent record within max_age window (measured
+                            back from as_of_ts when given, else from now)
     get_for_ticker(...)   → all records associated with a market identifier
 
 Redis cache:
@@ -55,6 +56,11 @@ def _utcnow() -> datetime:
 def _as_utc(ts: datetime) -> datetime:
     """Treat a naive datetime as UTC; convert an aware one to UTC."""
     return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts.astimezone(timezone.utc)
+
+
+def _age_reference(query: FeatureQuery) -> datetime:
+    """The instant max_age_sec counts back from: as_of_ts if set, else now."""
+    return _as_utc(query.as_of_ts) if query.as_of_ts is not None else _utcnow()
 
 
 class FeatureStore:
@@ -344,7 +350,7 @@ class FeatureStore:
         if query.start_ts is not None:
             lower = _as_utc(query.start_ts)
         if query.max_age_sec is not None:
-            age_floor = _utcnow() - timedelta(seconds=query.max_age_sec)
+            age_floor = _age_reference(query) - timedelta(seconds=query.max_age_sec)
             lower = max(lower, age_floor) if lower else age_floor
 
         for ts in (query.as_of_ts, query.end_ts):
@@ -396,7 +402,7 @@ class FeatureStore:
             end = pd.Timestamp(query.end_ts, tz="UTC") if query.end_ts.tzinfo is None else pd.Timestamp(query.end_ts)
             df = df[df["as_of_ts"] <= end]
         if query.max_age_sec is not None:
-            cutoff_age = pd.Timestamp(_utcnow()) - pd.Timedelta(seconds=query.max_age_sec)
+            cutoff_age = pd.Timestamp(_age_reference(query)) - pd.Timedelta(seconds=query.max_age_sec)
             df = df[df["as_of_ts"] >= cutoff_age]
 
         df = df.sort_values("as_of_ts", ascending=False).head(query.limit)

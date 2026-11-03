@@ -111,6 +111,37 @@ class TestAntiLookahead:
         assert result is not None
 
 
+class TestMaxAge:
+    """max_age_sec counts back from as_of_ts, so historical reads still work."""
+
+    T = datetime(2025, 1, 15, 12, 0, tzinfo=timezone.utc)
+
+    def test_get_latest_in_the_past_honours_max_age(self, tmp_store):
+        tmp_store.write(make_record(value=0.4, as_of_ts=self.T - timedelta(hours=2)))
+        rec = tmp_store.get_latest("US", "news_sentiment", max_age_sec=86400, as_of_ts=self.T)
+        assert rec is not None and abs(rec.value - 0.4) < 1e-6
+
+    def test_record_older_than_max_age_before_as_of_is_excluded(self, tmp_store):
+        tmp_store.write(make_record(as_of_ts=self.T - timedelta(hours=30)))
+        assert tmp_store.get_latest("US", "news_sentiment", max_age_sec=86400, as_of_ts=self.T) is None
+
+    def test_read_window_is_anchored_on_as_of(self, tmp_store):
+        tmp_store.write(make_record(value=0.1, as_of_ts=self.T - timedelta(hours=30)))
+        tmp_store.write(make_record(value=0.2, as_of_ts=self.T - timedelta(hours=1)))
+        tmp_store.write(make_record(value=0.3, as_of_ts=self.T + timedelta(hours=1)))
+        got = tmp_store.read(FeatureQuery(entity="US", signal_type="news_sentiment",
+                                          as_of_ts=self.T, max_age_sec=86400))
+        assert [round(r.value, 1) for r in got] == [0.2]
+
+    def test_without_as_of_max_age_counts_from_now(self, tmp_store):
+        now = datetime.now(timezone.utc)
+        tmp_store.write(make_record(value=0.6, as_of_ts=now - timedelta(minutes=5)))
+        tmp_store.write(make_record(source="fred", signal_type="economic_indicator",
+                                    as_of_ts=now - timedelta(days=3)))
+        assert tmp_store.get_latest("US", "news_sentiment", source="gdelt", max_age_sec=3600) is not None
+        assert tmp_store.get_latest("US", "economic_indicator", source="fred", max_age_sec=86400) is None
+
+
 class TestDatetimeParsing:
     def test_microsecond_timestamps_roundtrip(self, tmp_store):
         """Records with microseconds in as_of_ts must survive a write/read cycle."""
