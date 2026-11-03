@@ -50,6 +50,12 @@ _PROBE_CONCURRENCY = 20
 # next hourly sweep.
 _PROBE_MAX_ATTEMPTS = 3
 
+# /markets page size (Kalshi's maximum) and a cap on pages per series. Some
+# series hold thousands of open markets at once — election ladders, hourly
+# index ranges — and a single 200-row page silently dropped up to 97% of them.
+_MARKETS_PAGE_LIMIT = 1000
+_MAX_PAGES_PER_SERIES = 50
+
 # Fields of the /markets payload that describe how a contract settles, as
 # opposed to how it is currently priced. Captured because misreading the
 # resolution criteria is the dominant source of fake edge: `title` alone is
@@ -198,37 +204,65 @@ class KalshiIngestor(BaseIngestor):
     ) -> list[dict] | None:
         """Return currently open markets for one series.
 
+        Pages through the series with Kalshi's cursor, so a series with more
+        open markets than one page holds is returned whole.
+
         [] means the series has nothing open; None means the probe failed
-        (rate limited past _PROBE_MAX_ATTEMPTS, or an HTTP/transport error),
-        so callers can keep a series they can't currently see.
+        (rate limited past _PROBE_MAX_ATTEMPTS, or an HTTP/transport error)
+        before any market was read, so callers can keep a series they can't
+        currently see. A failure on a later page returns the pages already
+        read rather than discarding them.
         """
         stats = self._probe_stats
+        markets: list[dict] = []
+        cursor: str | None = None
         async with sem:
             path = "/markets"
-            for attempt in range(1, _PROBE_MAX_ATTEMPTS + 1):
-                headers = _build_auth_headers("GET", "/trade-api/v2" + path)
-                stats["requests"] += 1
-                try:
-                    resp = await client.get(
-                        config.KALSHI_BASE_URL + path,
-                        headers=headers,
-                        params={"series_ticker": series_ticker, "status": "open", "limit": 200},
-                    )
-                    if resp.status_code == 429:
-                        stats["rate_limited"] += 1
-                        if attempt == _PROBE_MAX_ATTEMPTS:
-                            break
-                        retry_after = int(resp.headers.get("Retry-After", 5))
-                        logger.debug("Kalshi rate limited on series=%s; sleeping %ds", series_ticker, retry_after)
-                        await asyncio.sleep(retry_after)
-                        continue
-                    resp.raise_for_status()
-                    return resp.json().get("markets", [])
-                except Exception as exc:
-                    logger.debug("Kalshi series probe failed for %s: %s", series_ticker, exc)
-                    break
-            stats["failed"] += 1
-            return None
+            for _ in range(_MAX_PAGES_PER_SERIES):
+                params: dict[str, Any] = {
+                    "series_ticker": series_ticker, "status": "open", "limit": _MARKETS_PAGE_LIMIT,
+                }
+                if cursor:
+                    params["cursor"] = cursor
+                page = await self._get_markets_page(client, path, params, series_ticker)
+                if page is None:
+                    stats["failed"] += 1
+                    return markets or None
+                batch, cursor = page
+                markets.extend(batch)
+                if not cursor or not batch:
+                    return markets
+            logger.warning(
+                "Kalshi series %s still had more open markets after %d pages; truncated at %d",
+                series_ticker, _MAX_PAGES_PER_SERIES, len(markets),
+            )
+            return markets
+
+    async def _get_markets_page(
+        self, client: httpx.AsyncClient, path: str, params: dict[str, Any], series_ticker: str
+    ) -> tuple[list[dict], str | None] | None:
+        """One /markets page as (markets, next cursor), retrying 429s; None on failure."""
+        stats = self._probe_stats
+        for attempt in range(1, _PROBE_MAX_ATTEMPTS + 1):
+            headers = _build_auth_headers("GET", "/trade-api/v2" + path)
+            stats["requests"] += 1
+            try:
+                resp = await client.get(config.KALSHI_BASE_URL + path, headers=headers, params=params)
+                if resp.status_code == 429:
+                    stats["rate_limited"] += 1
+                    if attempt == _PROBE_MAX_ATTEMPTS:
+                        return None
+                    retry_after = int(resp.headers.get("Retry-After", 5))
+                    logger.debug("Kalshi rate limited on series=%s; sleeping %ds", series_ticker, retry_after)
+                    await asyncio.sleep(retry_after)
+                    continue
+                resp.raise_for_status()
+                body = resp.json()
+                return body.get("markets", []), body.get("cursor") or None
+            except Exception as exc:
+                logger.debug("Kalshi series probe failed for %s: %s", series_ticker, exc)
+                return None
+        return None
 
     async def _refresh_active_series(self, client: httpx.AsyncClient) -> dict[str, list[dict]]:
         """Probe every focused series for open markets.

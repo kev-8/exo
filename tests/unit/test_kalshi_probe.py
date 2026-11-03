@@ -108,3 +108,53 @@ class TestAuthKey:
             assert K._load_private_key() is first
             assert ser.load_pem_private_key.call_count == 1
         K._key_cache = None
+
+
+class _Page(_Resp):
+    def __init__(self, markets, cursor=None):
+        super().__init__(200, markets)
+        self._cursor = cursor
+
+    def json(self):
+        return {"markets": self._markets, "cursor": self._cursor}
+
+
+class TestPagination:
+    @pytest.mark.asyncio
+    async def test_all_pages_of_a_large_series_are_read(self, ingestor):
+        raws = await _fetch(ingestor, {
+            "A": [_Page([_market(f"A-{i}") for i in range(3)], "c1"),
+                  _Page([_market(f"A-{i}") for i in range(3, 5)], "c2"),
+                  _Page([])],
+            "B": [_Page([_market("B-1")])],
+        })
+        assert {r.entity for r in raws} == {"A-0", "A-1", "A-2", "A-3", "A-4", "B-1"}
+
+    @pytest.mark.asyncio
+    async def test_failure_on_a_later_page_keeps_earlier_pages(self, ingestor):
+        raws = await _fetch(ingestor, {
+            "A": [_Page([_market("A-1")], "c1"), _Resp(500)],
+            "B": [_Page([])],
+        })
+        assert {r.entity for r in raws} == {"A-1"}
+        assert ingestor._probe_stats["failed"] == 1
+        assert ingestor._active_series == {"A"}
+
+    @pytest.mark.asyncio
+    async def test_cursor_and_page_size_are_sent(self, ingestor):
+        seen = []
+        client = AsyncMock()
+        client.__aenter__.return_value = client
+        pages = [_Page([_market("A-1")], "next"), _Page([_market("A-2")])]
+
+        async def get(url, headers=None, params=None):
+            seen.append(dict(params))
+            return pages.pop(0) if params["series_ticker"] == "A" else _Page([])
+
+        client.get.side_effect = get
+        with patch("exo.ingestion.kalshi.httpx.AsyncClient", return_value=client), \
+             patch("exo.ingestion.kalshi._build_auth_headers", return_value={}):
+            await ingestor.fetch()
+        a_calls = [p for p in seen if p["series_ticker"] == "A"]
+        assert [p.get("cursor") for p in a_calls] == [None, "next"]
+        assert all(p["limit"] == K._MARKETS_PAGE_LIMIT for p in a_calls)
