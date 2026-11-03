@@ -117,12 +117,15 @@ def ai_exposure_jumps(
     now: datetime | None = None,
     days: int = 7,
     threshold: float = AI_JUMP_THRESHOLD,
-) -> dict[str, dict[str, Any]]:
+) -> tuple[dict[str, dict[str, Any]], list[str]]:
     """Countries whose ai_exposure moved more than *threshold* since *days* ago.
 
     A jump with no real event behind it (a new list designation, a data
     release) means the score is unstable: set config.AI_EXPOSURE_WEIGHT to 0.
     The contributing signals on both sides are returned to judge that.
+
+    Also returns the countries that had a score at both ends and so were
+    compared: no jumps out of zero comparisons is not a pass.
     """
     now = now or datetime.now(timezone.utc)
 
@@ -131,14 +134,16 @@ def ai_exposure_jumps(
         return next((d for s in snaps for d in s.dimensions if d.name == "ai_exposure"), None)
 
     jumps: dict[str, dict[str, Any]] = {}
+    compared: list[str] = []
     for country in countries:
         after, before = ai_at(country, now), ai_at(country, now - timedelta(days=days))
         if after is None or before is None:
             continue
+        compared.append(country)
         if abs(after.score - before.score) > threshold:
             jumps[country] = {
                 "before": before.score, "after": after.score,
                 "signals_before": before.contributing_signals,
                 "signals_after": after.contributing_signals,
             }
-    return jumps
+    return jumps, compared

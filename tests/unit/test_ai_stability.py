@@ -22,7 +22,15 @@ def test_flags_only_jumps_over_threshold(tmp_path):
     _snap(store, "CN", 0.60, week_ago); _snap(store, "CN", 0.70, NOW)   # +0.10: flagged
     _snap(store, "JP", 0.33, week_ago); _snap(store, "JP", 0.36, NOW)   # +0.03: fine
     _snap(store, "KR", 0.0, week_ago, with_ai=False); _snap(store, "KR", 0.9, NOW)  # no baseline
-    jumps = ai_exposure_jumps(store, ["CN", "JP", "KR", "US"], now=NOW)
+    jumps, compared = ai_exposure_jumps(store, ["CN", "JP", "KR", "US"], now=NOW)
     assert set(jumps) == {"CN"}
+    assert compared == ["CN", "JP"]   # KR has no AI baseline, US no snapshots
     assert jumps["CN"]["before"] == 0.60 and jumps["CN"]["after"] == 0.70
     assert jumps["CN"]["signals_after"] == ["ai=0.7"]
+
+
+def test_reports_nothing_compared_without_history(tmp_path):
+    store = IndexStore(data_dir=tmp_path / "idx")
+    _snap(store, "CN", 0.7, NOW - timedelta(days=2))   # newer than the 7-day baseline
+    jumps, compared = ai_exposure_jumps(store, ["CN", "JP"], now=NOW)
+    assert jumps == {} and compared == []

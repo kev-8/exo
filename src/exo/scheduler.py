@@ -256,8 +256,20 @@ class ExoScheduler:
         from exo.risk_index.validation import AI_JUMP_THRESHOLD, ai_exposure_jumps
 
         loop = asyncio.get_event_loop()
-        jumps = await loop.run_in_executor(
+        jumps, compared = await loop.run_in_executor(
             None, ai_exposure_jumps, self.risk_index.index_store, COUNTRIES,
+        )
+        skipped = [c for c in COUNTRIES if c not in compared]
+        if not compared:
+            logger.warning(
+                "AI stability check compared 0 of %d countries: none has an AI exposure "
+                "score from 7 days ago, so stability is unchecked", len(COUNTRIES),
+            )
+            return
+        logger.info(
+            "AI stability check compared %d of %d countries%s",
+            len(compared), len(COUNTRIES),
+            f" (no 7-day-old score: {', '.join(skipped)})" if skipped else "",
         )
         if not jumps:
             logger.info("AI exposure stable: no country moved > %.2f in 7 days", AI_JUMP_THRESHOLD)
