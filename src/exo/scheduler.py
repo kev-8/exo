@@ -275,6 +275,7 @@ class ExoScheduler:
             (source, threshold_sec)
             for source, threshold_sec in config.STALENESS_THRESHOLDS.items()
             if source not in self._excluded_sources
+            and source not in config.STALENESS_ALERTS_OFF
         ]
 
         # Run filesystem checks sequentially — concurrent NFS stat() calls can

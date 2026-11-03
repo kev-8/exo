@@ -11,6 +11,7 @@ import concurrent.futures
 import logging
 import os
 import signal
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,6 +20,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from api.routes import countries, risk, signals, trade
+
+# add logging to capture ingest results, risk snapshots, and the AI component stability check)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+    stream=sys.stdout,
+)
+# One INFO line per request / per job run 
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +48,6 @@ async def lifespan(app: FastAPI):
     loop.set_exception_handler(_asyncio_exception_handler)
 
     # Log on SIGTERM so Railway crash logs include a final message before SIGKILL.
-    # Chain to uvicorn's handler (installed before lifespan runs) rather than
-    # replacing it: a handler that only logs swallows the signal entirely, so the
-    # process never shuts down gracefully — it just waits out the grace period
-    # and gets SIGKILLed, skipping scheduler.stop() and any in-flight writes.
     _prev_sigterm = signal.getsignal(signal.SIGTERM)
 
     def _on_sigterm(signum, frame):
@@ -57,12 +65,6 @@ async def lifespan(app: FastAPI):
         yield
         return
 
-    # Kalshi is never read by this API or the risk index — it exists purely
-    # for the separate exo-pm project, which ingests it locally. Running it
-    # here just fills the volume with files nothing here uses (it's what
-    # exhausted the volume's inodes and crashed this deployment previously).
-    # The settlement archiver is excluded for the same reason, and because a
-    # second copy would double its ~6,650-request sweeps against Kalshi.
     from exo.scheduler import ExoScheduler
     scheduler = ExoScheduler(exclude_jobs={"kalshi_rest", "kalshi_resolution"})
     await scheduler.start()

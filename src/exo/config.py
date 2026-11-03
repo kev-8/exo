@@ -27,12 +27,7 @@ KALSHI_WS_URL: str = os.getenv(
     "KALSHI_WS_URL", "wss://api.elections.kalshi.com/trade-api/ws/v2"
 )
 
-# Market categories the downstream analysis (exo-pm) actually scores.
-# The Kalshi ingestor uses this to scope live polling to relevant series —
-# without it, high-frequency synthetic/sports markets (thousands of new
-# tickers per day) drown out the slower-moving contracts these categories
-# care about. Single source of truth: downstream consumers should import
-# this rather than redefining their own copy.
+# Market categories the downstream analysis actually scores.
 FOCUSED_CATEGORIES: set[str] = {
     "World",
     "Economics",
@@ -75,6 +70,9 @@ STALENESS_THRESHOLDS: dict[str, float] = {
     "export_controls": 3 * 86400,    # daily poll
     "digital_infra": 45 * 86400,     # monthly poll
 }
+
+# Sources the staleness check skips. 
+STALENESS_ALERTS_OFF: frozenset[str] = frozenset({"ucdp_ged", "ucdp_candidate"})
 
 # Fixed year for cn_mineral_dependence: before China's 2023-25 export controls,
 # so later years' drop in Chinese supply doesn't read as reduced exposure.
